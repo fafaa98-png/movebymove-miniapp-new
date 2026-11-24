@@ -1,0 +1,1719 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MoveByMove — Дебютный тренажёр</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card: #111827;
+      --soft: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #10b981;
+      --accent-dark: #059669;
+      --border: #1e293b;
+      --light-sq: #e2e8f0;
+      --dark-sq: #475569;
+      --sel-sq: rgba(16, 185, 129, 0.55);
+      --last-sq: rgba(250, 204, 21, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .container { max-width: 720px; margin: 0 auto; padding: 14px; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+
+    .title { font-size: 16px; font-weight: 700; }
+    .sub { font-size: 12px; color: var(--muted); }
+
+    .pill {
+      background: rgba(16, 185, 129, 0.14);
+      color: #6ee7b7;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .card-title { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+    .opening-card {
+      background: #0c1322;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: #cbd5e1;
+      margin-right: 6px;
+    }
+
+    .btn {
+      border: 1px solid #334155;
+      background: var(--soft);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #04130d; }
+    .btn-primary:hover { background: var(--accent-dark); }
+    .btn-warn { background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #fcd34d; }
+    .btn-danger { background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.4); color: #fda4af; }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+    select, input[type="text"] {
+      background: #090d16;
+      color: var(--text);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .board-wrap { display: flex; justify-content: center; margin: 12px 0; }
+
+    .board {
+      width: 100%;
+      max-width: 384px;
+      aspect-ratio: 1 / 1;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border: 2px solid #334155;
+      border-radius: 10px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .sq {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(24px, 6.5vw, 38px);
+      line-height: 1;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .sq.light { background: var(--light-sq); color: #0f172a; }
+    .sq.dark { background: var(--dark-sq); color: #0f172a; }
+    .sq.white-piece { text-shadow: 0 1px 2px rgba(255, 255, 255, 0.75); }
+    .sq.black-piece { color: #020617; }
+    .sq.selected { background: var(--sel-sq); box-shadow: inset 0 0 0 3px var(--accent); }
+    .sq.last { background: var(--last-sq); }
+    .sq.hint::after {
+      content: "";
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.9);
+      border: 2px solid #ffffff;
+    }
+
+    .promo-bar {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      background: #0c1322;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .feedback {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      border: 1px solid var(--border);
+      background: #0c1322;
+    }
+
+    .feedback.ok { border-color: rgba(16, 185, 129, 0.45); color: #6ee7b7; background: rgba(16, 185, 129, 0.1); }
+    .feedback.err { border-color: rgba(244, 63, 94, 0.45); color: #fda4af; background: rgba(244, 63, 94, 0.1); }
+    .feedback.info { border-color: rgba(56, 189, 248, 0.45); color: #7dd3fc; background: rgba(56, 189, 248, 0.1); }
+
+    .moves {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+    }
+
+    .mv {
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: #0c1322;
+      border: 1px solid #1e293b;
+      color: #cbd5e1;
+    }
+
+    .mv.done { border-color: rgba(16, 185, 129, 0.45); color: #6ee7b7; }
+    .mv.cur { border-color: #f59e0b; color: #fcd34d; }
+
+    .stat {
+      background: #0c1322;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .stat-v { font-size: 18px; font-weight: 700; }
+    .stat-l { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .bar-bg { height: 8px; background: var(--soft); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+    .bar-fill { height: 100%; background: var(--accent); transition: width 0.25s ease; }
+
+    .lichess-item {
+      background: #0c1322;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .bottom-nav {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+      z-index: 20;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 4px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .tab-btn.active { color: #6ee7b7; background: rgba(16, 185, 129, 0.14); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="topbar">
+      <div>
+        <div class="title">MoveByMove</div>
+        <div class="sub" id="header-validation-sub">Дебютный тренажёр · SRS и XP</div>
+      </div>
+      <div class="pill" id="xp-pill">0 XP · Ур. 1</div>
+    </header>
+
+    <!-- Вкладка 1: Каталог дебютов -->
+    <section id="openings-view">
+      <div class="card">
+        <h2 class="card-title">Каталог дебютов</h2>
+        <p class="muted" style="margin:0 0 10px;">
+          Выберите дебют и линию. При загрузке все линии проходят проверку легальности ходов через <code>chess.js</code>.
+        </p>
+        <div class="row" style="margin-bottom: 8px;">
+          <select id="color-filter" style="max-width: 190px;">
+            <option value="all">Все цвета</option>
+            <option value="w">За белых</option>
+            <option value="b">За чёрных</option>
+          </select>
+          <input id="search-input" type="text" placeholder="Поиск по названию или ECO..." style="max-width: 280px;" />
+        </div>
+        <div id="validation-banner" class="feedback info hidden"></div>
+      </div>
+      <div id="openings-grid" class="grid-2"></div>
+    </section>
+
+    <!-- Вкладка 2: Интерактивная тренировка -->
+    <section id="trainer-view" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+          <div>
+            <div id="tr-opening" style="font-weight: 700; font-size: 15px;">Дебют</div>
+            <div id="tr-line" class="muted">Линия</div>
+          </div>
+          <span class="badge" id="tr-side">Играете за белых</span>
+        </div>
+
+        <div class="row" style="margin-bottom: 8px;">
+          <select id="tr-opening-select"></select>
+          <select id="tr-line-select"></select>
+        </div>
+
+        <div class="row">
+          <button type="button" class="btn btn-sm" id="btn-restart">Сначала</button>
+          <button type="button" class="btn btn-sm btn-warn" id="btn-hint">Подсказка (0 XP)</button>
+          <button type="button" class="btn btn-sm" id="btn-reveal">Показать ход (сброс SRS)</button>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-next-line">Следующая линия</button>
+        </div>
+
+        <div class="board-wrap">
+          <div id="board" class="board" role="grid" aria-label="Шахматная доска"></div>
+        </div>
+
+        <div id="promo-bar" class="promo-bar hidden">
+          <span style="font-size: 13px; font-weight: 600;">Выберите фигуру для превращения пешки:</span>
+          <div class="row">
+            <button type="button" class="btn btn-sm btn-primary" data-promo="q">Ферзь (♕)</button>
+            <button type="button" class="btn btn-sm" data-promo="r">Ладья (♖)</button>
+            <button type="button" class="btn btn-sm" data-promo="b">Слон (♗)</button>
+            <button type="button" class="btn btn-sm" data-promo="n">Конь (♘)</button>
+            <button type="button" class="btn btn-sm" data-promo="cancel">Отмена</button>
+          </div>
+        </div>
+
+        <div id="feedback" class="feedback info">
+          Выберите фигуру и клетку назначения, чтобы сделать ход по теории.
+        </div>
+
+        <div style="margin-top: 10px; font-size: 12px;" class="muted">
+          План линии: <span id="tr-plan" style="color:#e2e8f0;"></span>
+        </div>
+
+        <div id="moves-strip" class="moves"></div>
+      </div>
+    </section>
+
+    <!-- Вкладка 3: Профиль и SRS -->
+    <section id="profile-view" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content: space-between;">
+          <div>
+            <h2 class="card-title" id="prof-name" style="margin-bottom:2px;">Шахматист</h2>
+            <div class="muted" id="prof-level">Уровень 1 · Новичок дебютов</div>
+          </div>
+          <div class="pill" id="prof-streak">🔥 0 дн.</div>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" id="prof-xp-bar" style="width:0%;"></div></div>
+        <div class="muted" id="prof-xp-text" style="font-size:12px; margin-top:6px;">0 / 200 XP до следующего уровня</div>
+      </div>
+
+      <div class="grid-3" style="margin-bottom: 12px;">
+        <div class="stat">
+          <div class="stat-v" id="st-acc">—</div>
+          <div class="stat-l">Точность</div>
+        </div>
+        <div class="stat">
+          <div class="stat-v" id="st-mastered">0</div>
+          <div class="stat-l">Освоено линий</div>
+        </div>
+        <div class="stat">
+          <div class="stat-v" id="st-due">0</div>
+          <div class="stat-l">К повтору SRS</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Повторение сегодня (SRS)</h3>
+        <p class="muted" id="srs-text" style="margin:0 0 10px;">Карточек к повторению: 0</p>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-srs-train">Тренировать позицию SRS</button>
+        <div id="srs-status" class="feedback info hidden"></div>
+      </div>
+
+      <!-- Анализ партий через публичный API Lichess -->
+      <div class="card">
+        <h3 class="card-title">Анализ последних партий Lichess</h3>
+        <p class="muted" style="margin:0 0 10px;">
+          Загружает до 25 последних партий через публичный API Lichess, считает результат по цветам и находит частые дебюты.
+        </p>
+        <div class="row">
+          <input id="lichess-username-input" type="text" placeholder="Ник на Lichess (например, DrNykterstein)" style="max-width: 280px;" />
+          <button type="button" class="btn btn-primary btn-sm" id="btn-lichess-analyze">Анализировать</button>
+        </div>
+        <div id="lichess-status" class="feedback info hidden"></div>
+        <div id="lichess-summary" class="grid-3 hidden" style="margin-top: 10px;">
+          <div class="stat">
+            <div class="stat-v" id="lc-wdl">0 / 0 / 0</div>
+            <div class="stat-l">Победы / Ничьи / Поражения</div>
+          </div>
+          <div class="stat">
+            <div class="stat-v" id="lc-score">—</div>
+            <div class="stat-l">Доля очков</div>
+          </div>
+          <div class="stat">
+            <div class="stat-v" id="lc-colors">0 / 0</div>
+            <div class="stat-l">Белые / Чёрные</div>
+          </div>
+        </div>
+        <div id="lichess-openings-list"></div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Управление прогрессом</h3>
+        <div class="row">
+          <button type="button" class="btn btn-sm" id="btn-export">Экспорт JSON</button>
+          <button type="button" class="btn btn-sm btn-danger" id="btn-reset">Сбросить прогресс</button>
+        </div>
+        <div id="reset-status" class="feedback info hidden"></div>
+      </div>
+    </section>
+  </div>
+
+  <nav class="bottom-nav" aria-label="Навигация по разделам">
+    <button type="button" class="tab-btn active" data-tab="openings">Дебюты</button>
+    <button type="button" class="tab-btn" data-tab="trainer">Тренировка</button>
+    <button type="button" class="tab-btn" data-tab="profile">Профиль</button>
+  </nav>
+
+  <script>
+    const STORAGE_KEY = "mbm_standalone_v4";
+    const SRS_DAYS = [0, 1, 3, 7, 16, 35];
+    const GLYPHS = {
+      w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
+      b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" }
+    };
+
+    function makeLine(id, title, sanList, notes = []) {
+      const clean = (Array.isArray(sanList) ? sanList : []).map((s) =>
+        String(s).replace(/[!?+#]+$/g, "")
+      );
+      const fullNotes = clean.map((_, i) =>
+        Array.isArray(notes) && notes[i]
+          ? String(notes[i])
+          : i % 2 === 0
+          ? "Развиваем фигуры, укрепляем центр и координируем силы."
+          : "Соперник развивает фигуры и борется за центральные поля."
+      );
+      return { id, title, sanList: clean, notes: fullNotes };
+    }
+
+    const RAW_OPENINGS = [
+      {
+        id: "london_system",
+        title: "Лондонская система",
+        eco: "D02",
+        color: "w",
+        plan: "Треугольник d4-e3-c3, сохранение белопольного слона и атака на королевском фланге с f4-Qf3.",
+        lines: [
+          makeLine("london_main_e6_c5", "Классическая Лондонская против 1...d5 2...e6 и 3...c5", ["d4", "d5", "Bf4", "Nf6", "e3", "e6", "Nf3", "c5", "c3", "Nc6", "Nbd2", "Bd6", "Bg3", "O-O", "Bd3", "b6", "Ne5", "Bb7", "f4", "Ne7", "Qf3", "Nf5", "Bf2", "Be7"]),
+          makeLine("london_kingside_fianchetto", "Лондонская против фианкетто чёрных (...g6 + ...Bg7)", ["d4", "Nf6", "Bf4", "g6", "e3", "Bg7", "Nf3", "O-O", "Be2", "d6", "h3", "Nbd7", "O-O", "Qe8", "Bh2", "e5", "c4", "Qe7", "Nc3", "c6", "Rc1", "Re8", "Re1", "a6"]),
+          makeLine("london_c5_early", "Ответ на раннее 1...c5", ["d4", "c5", "Bf4", "cxd4", "Qxd4", "Nc6", "Qd2", "Nf6", "Nc3", "d6", "e4", "g6", "Nf3", "Bg7", "Be2", "O-O", "O-O", "Be6", "Rad1", "Qa5", "Nd4", "Nxd4", "Qxd4", "Rac8"]),
+          makeLine("london_jobava_style", "Активная схема с Nc3 и e4", ["d4", "d5", "Bf4", "Nf6", "Nc3", "e6", "e3", "c5", "Nb5", "Na6", "c3", "Be7", "Nf3", "O-O", "Be2", "Bd7", "a4", "c4", "Ne5", "Nc7", "Nxc7", "Qxc7", "Ng6", "Bd6"]),
+          makeLine("london_anti_slav_d5_c6", "Против схемы со слоном на f5 (...Bf5)", ["d4", "d5", "Bf4", "Bf5", "e3", "e6", "Nf3", "Nf6", "Bd3", "Bxd3", "Qxd3", "Nbd7", "Nbd2", "Be7", "O-O", "O-O", "c3", "c5", "Ne5", "Nxe5", "Bxe5", "Nd7", "Bg3", "Qb6"]),
+          makeLine("london_trap_queen_h5", "Координация коня e5, слона g3/h4 и ферзя", ["d4", "d5", "Bf4", "Nf6", "e3", "c5", "c3", "Nc6", "Nd2", "e6", "Ngf3", "Bd6", "Bg3", "O-O", "Bd3", "Re8", "Ne5", "Qc7", "f4", "b6", "O-O", "Bb7", "Bh4", "Be7"])
+        ]
+      },
+      {
+        id: "kings_indian_defense",
+        title: "Староиндийская защита",
+        eco: "E60",
+        color: "b",
+        plan: "Фиксация центра и штурм на королевском фланге ходами ...f5 и ...g5.",
+        lines: [
+          makeLine("kid_mar_del_plata_main", "Штурм Мар-дель-Плата (5. Nf3 O-O 6. Be2 e5)", ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6", "Nf3", "O-O", "Be2", "e5", "O-O", "Nc6", "d5", "Ne7", "Ne1", "Nd7", "Be3", "f5", "f3", "f4", "Bf2", "g5"]),
+          makeLine("kid_samisch_variation", "Система Земиша (5. f3)", ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6", "f3", "O-O", "Be3", "e5", "d5", "Nh5", "Qd2", "Qh4+", "Bf2", "Qe7", "O-O-O", "f5", "exf5", "gxf5", "Kb1", "a6"]),
+          makeLine("kid_four_pawns_attack", "Атака четырёх пешек (5. f4)", ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6", "f4", "O-O", "Nf3", "c5", "d5", "e6", "Be2", "exd5", "cxd5", "Re8", "e5", "dxe5", "fxe5", "Ng4", "Bg5", "Qb6"]),
+          makeLine("kid_fianchetto_variation", "Система с фианкетто (3. g3)", ["d4", "Nf6", "c4", "g6", "g3", "Bg7", "Bg2", "O-O", "Nc3", "d6", "Nf3", "Nbd7", "O-O", "e5", "e4", "c6", "h3", "exd4", "Nxd4", "Re8", "Re1", "a5", "Be3", "Nc5"]),
+          makeLine("kid_anti_3_Nf3", "Система с ранним 3. Nf3", ["d4", "Nf6", "c4", "g6", "Nf3", "Bg7", "g3", "O-O", "Bg2", "d6", "O-O", "c5", "Nc3", "Nc6", "d5", "Na5", "Nd2", "a6", "Qc2", "Rb8", "b3", "b5", "Bb2", "e6"]),
+          makeLine("kid_trap_petrosian_e5", "Вариант Петросяна с ...Ng4", ["d4", "Nf6", "c4", "g6", "Nc3", "Bg7", "e4", "d6", "Nf3", "O-O", "Be2", "e5", "O-O", "Nbd7", "Be3", "Ng4", "Bg5", "f6", "Bh4", "g5", "Bg3", "Nh6", "dxe5", "dxe5"])
+        ]
+      },
+      {
+        id: "nimzo_indian_defense",
+        title: "Защита Нимцовича",
+        eco: "E20",
+        color: "b",
+        plan: "Связка коня c3, подрыв центра ...c5 и борьба за ключевые поля после размена на c3.",
+        lines: [
+          makeLine("nimzo_rubinstein_4_e3", "Система Рубинштейна (4. e3)", ["d4", "Nf6", "c4", "e6", "Nc3", "Bb4", "e3", "O-O", "Bd3", "c5", "Nf3", "Nc6", "O-O", "Bxc3", "bxc3", "d6", "Nd2", "b6", "Qe2", "e5", "Bb2", "Re8", "Rae1", "e4"]),
+          makeLine("nimzo_classical_4_Qc2", "Классическая система (4. Qc2)", ["d4", "Nf6", "c4", "e6", "Nc3", "Bb4", "Qc2", "O-O", "a3", "Bxc3+", "Qxc3", "b6", "Bg5", "Bb7", "f3", "d6", "e4", "Nbd7", "Bd3", "c5", "Ne2", "cxd4", "Qxd4", "Ne5"]),
+          makeLine("nimzo_samisch_4_a3", "Система Земиша (4. a3)", ["d4", "Nf6", "c4", "e6", "Nc3", "Bb4", "a3", "Bxc3+", "bxc3", "c5", "f3", "d5", "cxd5", "Nxd5", "dxc5", "Qa5", "e4", "Ne7", "Be3", "Nd7", "Qd2", "Nxc5", "Qf2", "b6"]),
+          makeLine("nimzo_leningrad_4_Bg5", "Система с 4. Bg5", ["d4", "Nf6", "c4", "e6", "Nc3", "Bb4", "Bg5", "h6", "Bh4", "c5", "d5", "d6", "e3", "e5", "Ne2", "Nbd7", "a3", "Bxc3+", "Nxc3", "Nf8", "Be2", "Ng6", "Bg3", "O-O"]),
+          makeLine("nimzo_4_Nf3_b6", "Система с 4. Nf3 и слоном на b7", ["d4", "Nf6", "c4", "e6", "Nc3", "Bb4", "Nf3", "b6", "Bg5", "Bb7", "e3", "h6", "Bh4", "g5", "Bg3", "Ne4", "Qc2", "Bxc3+", "bxc3", "d6", "Bd3", "Nxg3", "hxg3", "Nd7"]),
+          makeLine("nimzo_trap_hubner", "Вариант Хюбнера", ["d4", "Nf6", "c4", "e6", "Nc3", "Bb4", "e3", "c5", "Bd3", "Nc6", "Nf3", "Bxc3+", "bxc3", "d6", "e4", "e5", "d5", "Ne7", "Nh4", "Ng6", "Nf5", "O-O", "O-O", "Ne8"])
+        ]
+      },
+      {
+        id: "slav_defense",
+        title: "Славянская защита",
+        eco: "D10",
+        color: "b",
+        plan: "Прочный пешечный остов с ...c6, слон на f5 и подрыв центра ходом ...e5.",
+        lines: [
+          makeLine("slav_main_3_Nf3_Nf6_4_Nc3_dxc4", "Классическая славянская (4...dxc4)", ["d4", "d5", "c4", "c6", "Nf3", "Nf6", "Nc3", "dxc4", "a4", "Bf5", "Ne5", "Nbd7", "Nxc4", "Qc7", "g3", "e5", "Bg2", "Be6", "Qd3", "Rd8", "O-O", "exd4", "Qxd4", "Bc5"]),
+          makeLine("slav_chebanenko_3_Nf3_a6", "Система Чебаненко (3...a6)", ["d4", "d5", "c4", "c6", "Nf3", "a6", "Nbd2", "Nf6", "e3", "Bf5", "Nh4", "Bg6", "Nxg6", "hxg6", "Be2", "e6", "O-O", "Nbd7", "b3", "Bd6", "h3", "Qe7", "Bb2", "O-O-O"]),
+          makeLine("slav_exchange_3_cxd5", "Разменный вариант (3. cxd5 cxd5)", ["d4", "d5", "c4", "c6", "cxd5", "cxd5", "Nc3", "Nf6", "Bf4", "Nc6", "e3", "Bf5", "Nf3", "e6", "Qb3", "Bb4", "Bb5", "O-O", "Bxc6", "Bxc3+", "Qxc3", "Rc8", "Qa3", "Rxc6"]),
+          makeLine("slav_soultanbeieff_4_e3_Bf5", "Система с 4. e3 и слоном на f5", ["d4", "d5", "c4", "c6", "Nf3", "Nf6", "e3", "Bf5", "Nc3", "e6", "Nh4", "Bg6", "Nxg6", "hxg6", "Bd3", "Nbd7", "O-O", "Bd6", "h3", "Qe7", "e4", "dxe4", "Nxe4", "Nxe4"]),
+          makeLine("slav_anti_3_Nc3", "Против 3. Nc3", ["d4", "d5", "c4", "c6", "Nc3", "Nf6", "Nf3", "dxc4", "a4", "Bg4", "Ne5", "Bh5", "f3", "Nfd7", "Nxc4", "e5", "dxe5", "Nxe5", "Qxd8+", "Kxd8", "Nxe5", "Nd7", "Nxd7", "Kxd7"]),
+          makeLine("slav_trap_wiesbaden", "Контригра на ферзевом фланге ...b5", ["d4", "d5", "c4", "c6", "Nf3", "Nf6", "Nc3", "dxc4", "e4", "b5", "e5", "Nd5", "a4", "Nxc3", "bxc3", "Qd5", "Be2", "Bf5", "O-O", "e6", "Nh4", "Be4", "f3", "Bg6"])
+        ]
+      },
+      {
+        id: "english_opening",
+        title: "Английское начало",
+        eco: "A10",
+        color: "w",
+        plan: "Фланговый контроль поля d5, фианкетто слона g2 и гибкая игра по линии c и центру.",
+        lines: [
+          makeLine("english_symmetrical_1_c5", "Симметричный вариант (1...c5)", ["c4", "c5", "Nc3", "Nc6", "g3", "g6", "Bg2", "Bg7", "Nf3", "Nf6", "O-O", "O-O", "d4", "cxd4", "Nxd4", "Nxd4", "Qxd4", "d6", "Qd3", "a6", "Bd2", "Rb8", "Rac1", "Bd7"]),
+          makeLine("english_reversed_sicilian_1_e5", "Обращённая сицилианская (1...e5)", ["c4", "e5", "Nc3", "Nf6", "Nf3", "Nc6", "g3", "Bb4", "Nd5", "Nxd5", "cxd5", "Nd4", "Nxd4", "exd4", "Bg2", "O-O", "O-O", "Re8", "d3", "d6", "Bd2", "Bxd2", "Qxd2", "Qe7"]),
+          makeLine("english_anglo_indian_1_Nf6", "Англо-индийская система", ["c4", "Nf6", "Nc3", "e6", "Nf3", "d5", "e3", "Be7", "b3", "O-O", "Bb2", "c5", "cxd5", "Nxd5", "Nxd5", "Qxd5", "Bc4", "Qd6", "O-O", "Nc6", "Qc2", "b6", "Rad1", "Bb7"]),
+          makeLine("english_botvinnik_system", "Система Ботвинника (e4 + g3 + d3)", ["c4", "c5", "Nc3", "Nc6", "g3", "g6", "Bg2", "Bg7", "e4", "d6", "Nge2", "e5", "d3", "Nge7", "O-O", "O-O", "a3", "a6", "Rb1", "Rb8", "b4", "b6", "Be3", "Be6"]),
+          makeLine("english_anti_1_e5_d3", "Гибкая схема с ранним d3 против 1...e5", ["c4", "e5", "Nc3", "Nf6", "Nf3", "Nc6", "d3", "Bb4", "g3", "O-O", "Bg2", "Re8", "O-O", "h6", "Nd5", "Bc5", "e3", "d6", "b3", "a5", "Bb2", "Ba7", "Qd2", "Nxd5"]),
+          makeLine("english_trap_bremen", "Бременский порядок ходов и переход к d4", ["c4", "e5", "Nc3", "Nf6", "e4", "Bc5", "Nf3", "d6", "d4", "exd4", "Nxd4", "O-O", "Be2", "Re8", "f3", "c6", "Be3", "Qb6", "Na4", "Qa5+", "Bd2", "Qc7", "Bc3", "Nbd7"])
+        ]
+      },
+      {
+        id: "grunfeld_defense",
+        title: "Защита Грюнфельда",
+        eco: "D70",
+        color: "b",
+        plan: "Давление на центр ударами ...c5 и ...e5 и фигурное давление на поле d4.",
+        lines: [
+          makeLine("grunfeld_exchange_main", "Разменный вариант (4. cxd5 Nxd5 5. e4 Nxc3 6. bxc3)", ["d4", "Nf6", "c4", "g6", "Nc3", "d5", "cxd5", "Nxd5", "e4", "Nxc3", "bxc3", "Bg7", "Bc4", "c5", "Ne2", "Nc6", "Be3", "O-O", "O-O", "Na5", "Bd3", "b6", "Qd2", "e5"]),
+          makeLine("grunfeld_russian_5_Nf3", "Русская система (5. Nf3)", ["d4", "Nf6", "c4", "g6", "Nc3", "d5", "cxd5", "Nxd5", "Nf3", "Bg7", "e4", "Nxc3", "bxc3", "c5", "Be3", "Qa5", "Qd2", "O-O", "Rc1", "cxd4", "cxd4", "Qxd2+", "Nxd2", "Bd7"]),
+          makeLine("grunfeld_4_Nf3_Bg7", "Вариант с 4. Nf3 Bg7 5. Qb3", ["d4", "Nf6", "c4", "g6", "Nc3", "d5", "Nf3", "Bg7", "Qb3", "dxc4", "Qxc4", "O-O", "e4", "Bg4", "Be3", "Nfd7", "Be2", "Nb6", "Qc5", "Nc6", "Rd1", "Qd6", "O-O", "Rfd8"]),
+          makeLine("grunfeld_fianchetto_3_g3", "Система с фианкетто (3. g3)", ["d4", "Nf6", "c4", "g6", "g3", "Bg7", "Bg2", "d5", "cxd5", "Nxd5", "Nf3", "O-O", "O-O", "c5", "e4", "Nb6", "d5", "e6", "Re1", "exd5", "exd5", "Bf5", "Nc3", "Na6"]),
+          makeLine("grunfeld_4_Bg5_Ne4", "Острый вариант с 4. Bg5 Ne4", ["d4", "Nf6", "c4", "g6", "Nc3", "d5", "Bg5", "Ne4", "Bh4", "Nxc3", "bxc3", "Bg7", "e3", "c5", "cxd5", "Qxd5", "Nf3", "Nc6", "Be2", "cxd4", "cxd4", "Qa5+", "Qd2", "Qxd2+"]),
+          makeLine("grunfeld_trap_smyslov", "Централизация коня на e4", ["d4", "Nf6", "c4", "g6", "Nc3", "d5", "Nf3", "Bg7", "Bg5", "dxc4", "e3", "c5", "Bxc4", "cxd4", "exd4", "O-O", "O-O", "Nc6", "h3", "h6", "Be3", "Bf5", "Qe2", "Ne4"])
+        ]
+      },
+      {
+        id: "scotch_game",
+        title: "Шотландская партия",
+        eco: "C45",
+        color: "w",
+        plan: "Раннее вскрытие центра ходом d4 и активная фигурная игра.",
+        lines: [
+          makeLine("scotch_main_4_exd4_5_Nxd4", "Классический вариант (5. Nxd4)", ["e4", "e5", "Nf3", "Nc6", "d4", "exd4", "Nxd4", "Bc5", "Be3", "Qf6", "c3", "Nge7", "Bc4", "Ne5", "Be2", "Qg6", "O-O", "d6", "Nd2", "O-O", "f4", "Ng4", "Bxg4", "Bxg4"]),
+          makeLine("scotch_mieses_5_Nxd4_Nf6", "Вариант с 5...Nf6 6. Nxc6 bxc6", ["e4", "e5", "Nf3", "Nc6", "d4", "exd4", "Nxd4", "Nf6", "Nxc6", "bxc6", "e5", "Qe7", "Qe2", "Nd5", "c4", "Ba6", "b3", "g6", "f4", "Bg7", "Qf2", "Nb6", "Be2", "d6"]),
+          makeLine("scotch_gambit_4_Bc4", "Шотландский гамбит (4. Bc4)", ["e4", "e5", "Nf3", "Nc6", "d4", "exd4", "Bc4", "Bc5", "c3", "Nf6", "cxd4", "Bb4+", "Bd2", "Bxd2+", "Nbxd2", "d5", "exd5", "Nxd5", "Qb3", "Nce7", "O-O", "O-O", "Rfe1", "c6"]),
+          makeLine("scotch_4_Nf6", "Ответ чёрных 4...Nf6", ["e4", "e5", "Nf3", "Nc6", "d4", "Nf6", "d5", "Ne7", "Nxe5", "Nxe4", "Qd4", "Nf6", "Nc3", "Ng6", "Nf3", "Be7", "Be2", "O-O", "O-O", "d6", "h3", "Re8", "Re1", "Bf8"]),
+          makeLine("scotch_5_Nxd4_g6", "Фианкетто слона чёрных (5...g6)", ["e4", "e5", "Nf3", "Nc6", "d4", "exd4", "Nxd4", "g6", "Nxc6", "bxc6", "Qd4", "Qf6", "e5", "Qe7", "Be2", "Bg7", "f4", "d6", "Qc4", "Bd7", "exd6", "cxd6", "O-O", "Nf6"]),
+          makeLine("scotch_trap_classical_queen", "Атака на f7 и g7 после 5. Nb5", ["e4", "e5", "Nf3", "Nc6", "d4", "exd4", "Nxd4", "Bc5", "Be3", "Qf6", "Nb5", "Bxe3", "fxe3", "Qd8", "Qg4", "g6", "Qf4", "d6", "Bc4", "Ne5", "O-O", "Qe7", "Bb3", "a6"])
+        ]
+      },
+      {
+        id: "vienna_game",
+        title: "Венская партия",
+        eco: "C25",
+        color: "w",
+        plan: "Развитие коня на c3 с сохранением гибкости в центре и подготовкой f4.",
+        lines: [
+          makeLine("vienna_gambit_2_Nc6_3_f4", "Венский гамбит (3. f4)", ["e4", "e5", "Nc3", "Nc6", "f4", "exf4", "Nf3", "g5", "Bc4", "Bg7", "O-O", "d6", "d4", "h6", "Ne2", "Nge7", "c3", "O-O", "g3", "g4", "Nh4", "f3", "Nf4", "Kh7"]),
+          makeLine("vienna_2_Nf6_3_Bc4", "Система с 2...Nf6 3. Bc4", ["e4", "e5", "Nc3", "Nf6", "Bc4", "Bc5", "d3", "d6", "f4", "Nc6", "Nf3", "Bg4", "h3", "Bxf3", "Qxf3", "Nd4", "Qg3", "Qe7", "fxe5", "dxe5", "Bg5", "c6", "O-O-O", "O-O-O"]),
+          makeLine("vienna_2_Bc5_3_Nf3", "Ответ чёрных 2...Bc5", ["e4", "e5", "Nc3", "Bc5", "Nf3", "d6", "d4", "exd4", "Nxd4", "Nf6", "Be2", "O-O", "O-O", "Re8", "Bf3", "Nbd7", "Nf5", "Ne5", "Be2", "Bxf5", "exf5", "Qd7", "g4", "h6"]),
+          makeLine("vienna_3_Bc4_Nf6_4_d3", "Спокойная венская с d3 и Nf3", ["e4", "e5", "Nc3", "Nf6", "Bc4", "Nc6", "d3", "Bb4", "Nf3", "d6", "O-O", "O-O", "Bg5", "Bxc3", "bxc3", "h6", "Bh4", "Qe7", "Qe2", "Be6", "Bb3", "Bxb3", "axb3", "g5"]),
+          makeLine("vienna_anti_2_Nc6_3_Nf3", "Гибкое развитие с 3. Nf3 и Bb5", ["e4", "e5", "Nc3", "Nc6", "Nf3", "Nf6", "Bb5", "Bc5", "O-O", "O-O", "d3", "d6", "Bg5", "h6", "Bh4", "a6", "Ba4", "Be6", "Bb3", "Bxb3", "axb3", "g5", "Bg3", "Nh5"]),
+          makeLine("vienna_trap_frankenstein_dracula", "Выпад ферзя на h5 против 3...Nxe4", ["e4", "e5", "Nc3", "Nf6", "Bc4", "Nxe4", "Qh5", "Nd6", "Bb3", "Nc6", "Nb5", "g6", "Qf3", "f5", "Qd5", "Qe7", "Nxc7+", "Kd8", "Nxa8", "b6", "d3", "Bb7", "h4", "f4"])
+        ]
+      },
+      {
+        id: "kings_gambit",
+        title: "Королевский гамбит",
+        eco: "C30",
+        color: "w",
+        plan: "Вскрытие линии f и быстрая атака на короля чёрных.",
+        lines: [
+          makeLine("kg_accepted_3_Nf3_g5", "Принятый королевский гамбит (3. Nf3 g5)", ["e4", "e5", "f4", "exf4", "Nf3", "g5", "Bc4", "Bg7", "h4", "h6", "d4", "d6", "Nc3", "Nc6", "e5", "dxe5", "O-O", "exd4", "Re1+", "Nge7", "Nd5", "Be6", "hxg5", "hxg5"]),
+          makeLine("kg_accepted_3_Bc4", "Гамбит слона (3. Bc4)", ["e4", "e5", "f4", "exf4", "Bc4", "Nf6", "Nc3", "c6", "Qe2", "Bb4", "e5", "O-O", "exf6", "Re8", "Ne4", "d5", "Bb3", "Rxe4", "Qxe4", "dxe4", "fxg7", "Kxg7", "Ne2", "Bg4"]),
+          makeLine("kg_declined_classical_2_Bc5", "Классический отказ (2...Bc5)", ["e4", "e5", "f4", "Bc5", "Nf3", "d6", "Nc3", "Nf6", "Bc4", "Nc6", "d3", "Bg4", "h3", "Bxf3", "Qxf3", "Nd4", "Qg3", "Qe7", "fxe5", "dxe5", "Bg5", "c6", "Rf1", "O-O-O"]),
+          makeLine("kg_falkbeer_countergambit_2_d5", "Контргамбит Фалькбеера (2...d5)", ["e4", "e5", "f4", "d5", "exd5", "e4", "d3", "Nf6", "Nd2", "exd3", "Bxd3", "Qxd5", "Qe2+", "Be7", "Ngf3", "O-O", "O-O", "Nc6", "Nde4", "Nxe4", "Qxe4", "Qxe4", "Bxe4", "Bd7"]),
+          makeLine("kg_anti_2_Nf6", "Ответ чёрных 2...Nf6", ["e4", "e5", "f4", "Nf6", "fxe5", "Nxe4", "Nf3", "Ng5", "d4", "Nxf3+", "Qxf3", "Qh4+", "Qf2", "Qxf2+", "Kxf2", "d6", "exd6", "Bxd6", "Bd3", "Be6", "Re1", "Nd7", "Kg1", "O-O-O"]),
+          makeLine("kg_trap_muzio_idea", "Острая атака на королевском фланге", ["e4", "e5", "f4", "exf4", "Nf3", "g5", "Bc4", "g4", "O-O", "gxf3", "Qxf3", "Qf6", "e5", "Qxe5", "d3", "Bh6", "Nc3", "Ne7", "Bd2", "Nbc6", "Rae1", "Qc5+", "Kh1", "d6"])
+        ]
+      },
+      {
+        id: "four_knights_game",
+        title: "Дебют четырёх коней",
+        eco: "C47",
+        color: "w",
+        plan: "Симметричное развитие коней с последующим прорывом d4 и открытием линий.",
+        lines: [
+          makeLine("four_knights_spanish_4_Bb5", "Испанский вариант (4. Bb5)", ["e4", "e5", "Nf3", "Nc6", "Nc3", "Nf6", "Bb5", "Bb4", "O-O", "O-O", "d3", "d6", "Bg5", "Bxc3", "bxc3", "Qe7", "Re1", "Nd8", "d4", "Ne6", "Bc1", "c5", "Bf1", "Qc7"]),
+          makeLine("four_knights_scotch_4_d4", "Шотландский вариант (4. d4)", ["e4", "e5", "Nf3", "Nc6", "Nc3", "Nf6", "d4", "exd4", "Nxd4", "Bb4", "Nxc6", "bxc6", "Bd3", "d5", "exd5", "cxd5", "O-O", "O-O", "Bg5", "Be6", "Qf3", "Be7", "Rae1", "c6"]),
+          makeLine("four_knights_italian_4_Bc4", "Итальянский вариант (4. Bc4)", ["e4", "e5", "Nf3", "Nc6", "Nc3", "Nf6", "Bc4", "Bc5", "d3", "d6", "Bg5", "h6", "Bh4", "Be6", "Bb3", "g5", "Bg3", "Qe7", "O-O", "O-O-O", "Nd5", "Bxd5", "exd5", "Nb8"]),
+          makeLine("four_knights_4_Bb5_Nd4", "Острый ответ 4...Nd4", ["e4", "e5", "Nf3", "Nc6", "Nc3", "Nf6", "Bb5", "Nd4", "Nxd4", "exd4", "e5", "dxc3", "exf6", "Qxf6", "dxc3", "Bc5", "O-O", "O-O", "Qh5", "d6", "Bg5", "Qg6", "Qxg6", "hxg6"]),
+          makeLine("four_knights_anti_3_Bb4", "Против 3...Bb4", ["e4", "e5", "Nf3", "Nc6", "Nc3", "Bb4", "Bc4", "Nf6", "O-O", "O-O", "d3", "d6", "Bg5", "h6", "Bh4", "Be6", "Nd5", "Bxd5", "Bxd5", "g5", "Bg3", "Nxd5", "exd5", "Ne7"]),
+          makeLine("four_knights_trap_fork_trick", "Связки и шах Bb5+ в центре", ["e4", "e5", "Nf3", "Nc6", "Nc3", "Nf6", "d4", "exd4", "Nxd4", "Bb4", "Nxc6", "bxc6", "Qd4", "Qe7", "f3", "d5", "Bg5", "c5", "Bb5+", "Bd7", "Bxd7+", "Qxd7", "Bxf6", "gxf6"])
+        ]
+      },
+      {
+        id: "catalan_opening",
+        title: "Каталонское начало",
+        eco: "E01",
+        color: "w",
+        plan: "Давление слона g2 по большой диагонали в сочетании с контролем центра и прорывом e4.",
+        lines: [
+          makeLine("catalan_open_4_dxc4", "Открытый каталон (4...dxc4)", ["d4", "Nf6", "c4", "e6", "g3", "d5", "Bg2", "dxc4", "Nf3", "Nc6", "Qa4", "Bb4+", "Bd2", "Nd5", "Bxb4", "Ndxb4", "a3", "Nd5", "Qxc4", "Nb6", "Qc2", "O-O", "O-O", "Nxd4"]),
+          makeLine("catalan_closed_5_Be7", "Закрытый каталон (5...Be7)", ["d4", "Nf6", "c4", "e6", "g3", "d5", "Bg2", "Be7", "Nf3", "O-O", "O-O", "Nbd7", "Qc2", "c6", "Nbd2", "b6", "e4", "Bb7", "e5", "Ne8", "cxd5", "cxd5", "Re1", "Nc7"]),
+          makeLine("catalan_5_c5", "Активный подрыв 5...c5", ["d4", "Nf6", "c4", "e6", "g3", "d5", "Bg2", "Be7", "Nf3", "O-O", "O-O", "c5", "cxd5", "Nxd5", "e4", "Nf6", "Nc3", "Nc6", "d5", "exd5", "exd5", "Nb4", "Ne5", "Bf5"]),
+          makeLine("catalan_d5_early_2_d5", "Каталон против 1...d5 2. c4 e6 3. g3", ["d4", "d5", "c4", "e6", "g3", "Nf6", "Bg2", "Be7", "Nf3", "O-O", "O-O", "dxc4", "Qc2", "a6", "Qxc4", "b5", "Qc2", "Bb7", "Bd2", "Nbd7", "Ba5", "Rc8", "Nbd2", "c5"]),
+          makeLine("catalan_anti_3_Bb4+", "Ответ чёрных 3...Bb4+", ["d4", "Nf6", "c4", "e6", "g3", "Bb4+", "Bd2", "Be7", "Bg2", "d5", "Nf3", "O-O", "O-O", "Nbd7", "Qc2", "c6", "Bf4", "Nh5", "Bc1", "Nhf6", "Bf4", "Nh5", "Bc1", "Nhf6"]),
+          makeLine("catalan_trap_b7_pressure", "Давление по большой диагонали и прорыв e4-d5", ["d4", "Nf6", "c4", "e6", "g3", "d5", "Bg2", "dxc4", "Nf3", "a6", "O-O", "Nc6", "e3", "Bd7", "Qe2", "b5", "Rd1", "Be7", "e4", "O-O", "d5", "exd5", "exd5", "Na7"])
+        ]
+      },
+      {
+        id: "trompowsky_attack",
+        title: "Атака Тромповского",
+        eco: "A45",
+        color: "w",
+        plan: "Ранний выход слона на g5 для нарушения симметрии и создания динамики в центре.",
+        lines: [
+          makeLine("trompowsky_2_Ne4", "Острый ответ 2...Ne4", ["d4", "Nf6", "Bg5", "Ne4", "Bf4", "d5", "e3", "c5", "Nd2", "Nxd2", "Qxd2", "Nc6", "Nf3", "Qb6", "c3", "Bf5", "dxc5", "Qxc5", "Nd4", "Bg6", "Nb5", "Rc8", "Be2", "e6"]),
+          makeLine("trompowsky_2_e6_3_e4", "Центральный захват с 3. e4 против 2...e6", ["d4", "Nf6", "Bg5", "e6", "e4", "h6", "Bxf6", "Qxf6", "Nc3", "Bb4", "Qd2", "d6", "O-O-O", "Nd7", "f4", "e5", "Nf3", "Qxf4", "Qxf4", "exf4", "Nd5", "Ba5", "Nxf4", "Nf6"]),
+          makeLine("trompowsky_2_c5_3_d5", "Ответ чёрных 2...c5 и продвижение 3. d5", ["d4", "Nf6", "Bg5", "c5", "d5", "Qb6", "Nc3", "Qxb2", "Bd2", "Qb6", "e4", "d6", "f4", "g6", "Nf3", "Bg7", "Bc4", "O-O", "O-O", "Bg4", "Qe1", "Bxf3", "Rxf3", "Nbd7"]),
+          makeLine("trompowsky_2_g6", "Фианкетто чёрных 2...g6", ["d4", "Nf6", "Bg5", "g6", "Bxf6", "exf6", "e3", "Bg7", "g3", "O-O", "Bg2", "d6", "Ne2", "Nd7", "O-O", "f5", "c4", "Nf6", "Nc3", "Re8", "Qc2", "c6", "b4", "Bd7"]),
+          makeLine("trompowsky_anti_2_d5", "Система с 2...d5", ["d4", "Nf6", "Bg5", "d5", "e3", "c5", "c3", "Nbd7", "Nd2", "e6", "Bd3", "Be7", "f4", "O-O", "Qf3", "b6", "Nh3", "Bb7", "Nf2", "Rc8", "O-O", "Ne8", "Bxe7", "Qxe7"]),
+          makeLine("trompowsky_trap_early_pin", "Атака коня на e4 ходом f3", ["d4", "Nf6", "Bg5", "Ne4", "Bh4", "c5", "f3", "Qa5+", "c3", "Nf6", "dxc5", "Qxc5", "e4", "d6", "Bf2", "Qc7", "Nd2", "g6", "Ne2", "Bg7", "Nd4", "O-O", "Be2", "Nc6"])
+        ]
+      },
+      {
+        id: "reti_opening",
+        title: "Дебют Рети",
+        eco: "A04",
+        color: "w",
+        plan: "Гибкое фланговое развитие с фианкетто слонов и атакой на центр соперника.",
+        lines: [
+          makeLine("reti_1_d5_2_c4", "Классический Рети (1...d5 2. c4)", ["Nf3", "d5", "c4", "c6", "b3", "Nf6", "g3", "Bf5", "Bg2", "e6", "O-O", "Nbd7", "Bb2", "Be7", "d3", "O-O", "Nbd2", "h6", "Rc1", "Bh7", "Rc2", "a5", "Qa1", "Qb6"]),
+          makeLine("reti_kings_indian_attack", "Атака в староиндийском духе", ["Nf3", "d5", "g3", "Nf6", "Bg2", "c6", "O-O", "Bg4", "d3", "Nbd7", "Nbd2", "e6", "e4", "Be7", "Qe2", "O-O", "e5", "Ne8", "Re1", "Nc7", "Nf1", "c5", "h4", "b5"]),
+          makeLine("reti_2_dxc4", "Принятие пешки 2...dxc4", ["Nf3", "d5", "c4", "dxc4", "e3", "Nf6", "Bxc4", "e6", "O-O", "c5", "b3", "Be7", "Bb2", "O-O", "Nc3", "Nc6", "Rc1", "b6", "Qe2", "Bb7", "Rfd1", "Rc8", "d4", "cxd4"]),
+          makeLine("reti_1_Nf6_2_c4_g6", "Гибкая схема против 1...Nf6 2. c4 g6", ["Nf3", "Nf6", "c4", "g6", "b3", "Bg7", "Bb2", "O-O", "g3", "c5", "Bg2", "Nc6", "O-O", "d6", "d4", "cxd4", "Nxd4", "Nxd4", "Qxd4", "Qa5", "Nc3", "Nh5", "Qd2", "Nf6"]),
+          makeLine("reti_anti_1_c5", "Против 1...c5", ["Nf3", "c5", "g3", "Nc6", "Bg2", "g6", "O-O", "Bg7", "c4", "e5", "Nc3", "Nge7", "d3", "O-O", "Ne1", "d6", "Nc2", "Rb8", "Rb1", "a6", "b4", "cxb4", "Nxb4", "Nxb4"]),
+          makeLine("reti_trap_center_strike", "Подрыв центра ходом d4 после фианкетто", ["Nf3", "d5", "c4", "e6", "g3", "Nf6", "Bg2", "Be7", "O-O", "O-O", "b3", "c5", "cxd5", "exd5", "Bb2", "Nc6", "d4", "cxd4", "Nxd4", "Nxd4", "Qxd4", "Be6", "Nc3", "Qa5"])
+        ]
+      },
+      {
+        id: "birds_opening",
+        title: "Дебют Бёрда",
+        eco: "A02",
+        color: "w",
+        plan: "Контроль поля e5 и подготовка атак на королевском фланге.",
+        lines: [
+          makeLine("bird_1_d5_2_Nf3", "Классический Бёрд против 1...d5", ["f4", "d5", "Nf3", "Nf6", "e3", "g6", "Be2", "Bg7", "O-O", "O-O", "d3", "c5", "Qe1", "Nc6", "Qh4", "Qc7", "Nc3", "Rd8", "g4", "d4", "Nd1", "Nd5", "Ng5", "h6"]),
+          makeLine("bird_from_gambit_1_e5", "Гамбит Фрома (1...e5)", ["f4", "e5", "fxe5", "d6", "exd6", "Bxd6", "Nf3", "g5", "d4", "g4", "Ne5", "Bxe5", "dxe5", "Qxd1+", "Kxd1", "Nc6", "Bf4", "Nge7", "Nd2", "Ng6", "e3", "Ngxe5", "Bb5", "Bd7"]),
+          makeLine("bird_1_Nf6_2_Nf3", "Против 1...Nf6", ["f4", "Nf6", "Nf3", "g6", "e3", "Bg7", "Be2", "O-O", "O-O", "d6", "d3", "c5", "Qe1", "Nc6", "Qh4", "b5", "Nc3", "b4", "Nd1", "a5", "Nf2", "a4", "g4", "a3"]),
+          makeLine("bird_1_d5_2_b3", "Схема с фианкетто слона на b2", ["f4", "d5", "Nf3", "Nf6", "b3", "g6", "Bb2", "Bg7", "e3", "O-O", "Be2", "c5", "O-O", "Nc6", "Ne5", "Nxe5", "Bxe5", "Ne8", "Bxg7", "Nxg7", "Bf3", "e6", "Nc3", "Qe7"]),
+          makeLine("bird_anti_1_c5", "Против 1...c5", ["f4", "c5", "Nf3", "Nc6", "e3", "Nf6", "Bb5", "g6", "O-O", "Bg7", "d3", "O-O", "Bxc6", "dxc6", "Qe2", "Qc7", "Nbd2", "Rd8", "Ne5", "Nd7", "Nxd7", "Bxd7", "Nf3", "e5"]),
+          makeLine("bird_trap_e5_outpost", "Форпост на e5 в дебюте Бёрда", ["f4", "d5", "Nf3", "g6", "e3", "Bg7", "Be2", "Nf6", "O-O", "O-O", "d3", "c5", "Ne5", "Nfd7", "Nxd7", "Bxd7", "Nd2", "Bc6", "Nf3", "Nd7", "Qe1", "e5", "fxe5", "Nxe5"])
+        ]
+      },
+      {
+        id: "scandinavian_defense",
+        title: "Скандинавская защита",
+        eco: "B01",
+        color: "b",
+        plan: "Раннее вскрытие центра, развитие слона на f5 и прочная структура с ...c6 и ...e6.",
+        lines: [
+          makeLine("scandi_2_exd5_Qxd5_3_Nc3_Qa5", "Отход ферзя на a5 (3...Qa5)", ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qa5", "d4", "Nf6", "Nf3", "Bf5", "Ne5", "c6", "g4", "Be6", "Bc4", "Bxc4", "Nxc4", "Qc7", "Qe2", "e6", "g5", "Nd5", "Ne4", "Nd7"]),
+          makeLine("scandi_2_exd5_Nf6", "Скандинавская с 2...Nf6", ["e4", "d5", "exd5", "Nf6", "d4", "Nxd5", "Nf3", "g6", "Be2", "Bg7", "O-O", "O-O", "c4", "Nb6", "Nc3", "Nc6", "Be3", "Bg4", "d5", "Bxf3", "gxf3", "Ne5", "c5", "Nbd7"]),
+          makeLine("scandi_3_Nc3_Qd6", "Отход ферзя на d6 (3...Qd6)", ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qd6", "d4", "Nf6", "Nf3", "a6", "Ne5", "Nc6", "Nxc6", "Qxc6", "Be2", "Qxg2", "Bf3", "Qh3", "Bf4", "Bg4", "Bxg4", "Qxg4", "Qxg4", "Nxg4"]),
+          makeLine("scandi_2_Nc3_dxe4", "Ответ белых 2. Nc3", ["e4", "d5", "Nc3", "dxe4", "Nxe4", "Nf6", "Nxf6+", "exf6", "d4", "Bd6", "Nf3", "O-O", "Be2", "Re8", "O-O", "Bg4", "c3", "Nd7", "Re1", "c6", "Be3", "Qc7", "h3", "Bh5"]),
+          makeLine("scandi_anti_3_Nc3_Qd8", "Отступление ферзя на d8 (3...Qd8)", ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qd8", "d4", "Nf6", "Nf3", "Bf5", "Ne5", "e6", "g4", "Bg6", "h4", "h6", "Nxg6", "fxg6", "Qd3", "Kf7", "Be2", "Nc6", "Be3", "Bb4"]),
+          makeLine("scandi_trap_queen_a5_pin", "Связка слоном на g4 и контригра", ["e4", "d5", "exd5", "Qxd5", "Nc3", "Qa5", "Bc4", "Nf6", "d3", "c6", "Bd2", "Qc7", "Qe2", "Bg4", "f3", "Bh5", "g4", "Bg6", "h4", "h6", "Nh3", "e6", "Nf4", "Bh7"])
+        ]
+      },
+      {
+        id: "petrov_defense",
+        title: "Русская партия (Защита Петрова)",
+        eco: "C42",
+        color: "b",
+        plan: "Симметричный отыгрыш пешки в центре и надёжная контратака по линии e.",
+        lines: [
+          makeLine("petrov_classical_3_Nxe5_d6_4_Nf3_Nxe4", "Классическая русская (4...Nxe4)", ["e4", "e5", "Nf3", "Nf6", "Nxe5", "d6", "Nf3", "Nxe4", "d4", "d5", "Bd3", "Be7", "O-O", "Nc6", "Re1", "Bg4", "c3", "f5", "Qb3", "O-O", "Nbd2", "Kh8", "Ne5", "Nxe5"]),
+          makeLine("petrov_stafford_3_Nxe5_Nc6", "Острый вариант с 3...Nc6", ["e4", "e5", "Nf3", "Nf6", "Nxe5", "Nc6", "Nxc6", "dxc6", "d3", "Bc5", "Be2", "h5", "c3", "Ng4", "d4", "Qh4", "g3", "Qf6", "f3", "h4", "fxg4", "hxg3", "Be3", "g2"]),
+          makeLine("petrov_3_d4", "Вариант с 3. d4", ["e4", "e5", "Nf3", "Nf6", "d4", "exd4", "e5", "Ne4", "Qxd4", "d5", "exd6", "Nxd6", "Nc3", "Nc6", "Qf4", "Be7", "Be3", "O-O", "O-O-O", "Be6", "Bd3", "Qd7", "Ng5", "Bxg5"]),
+          makeLine("petrov_3_Nc3", "Ответ белых 3. Nc3", ["e4", "e5", "Nf3", "Nf6", "Nc3", "Bb4", "Nxe5", "O-O", "Be2", "Re8", "Nd3", "Bxc3", "dxc3", "Nxe4", "O-O", "d5", "Nf4", "c6", "Be3", "Nd7", "Re1", "Nf8", "Bf1", "Ng6"]),
+          makeLine("petrov_anti_cochrane_gambit", "Против жертвы на f7 (4. Nxf7)", ["e4", "e5", "Nf3", "Nf6", "Nxe5", "d6", "Nxf7", "Kxf7", "d4", "d5", "e5", "Ne4", "Bd3", "Be7", "O-O", "Rf8", "c4", "Kg8", "cxd5", "Qxd5", "Qe2", "Qxd4", "Bxe4", "Bf5"]),
+          makeLine("petrov_trap_e4_pin", "Упрощение центра и контригра по линии e", ["e4", "e5", "Nf3", "Nf6", "Nxe5", "d6", "Nf3", "Nxe4", "Nc3", "Nxc3", "dxc3", "Be7", "Be3", "O-O", "Qd2", "Nd7", "O-O-O", "Nf6", "Bd3", "Bg4", "h3", "Bh5", "g4", "Bg6"])
+        ]
+      },
+      {
+        id: "philidor_defense",
+        title: "Защита Филидора",
+        eco: "C41",
+        color: "b",
+        plan: "Укрепление центра пешкой d6 и перестроение фигур для встречной игры.",
+        lines: [
+          makeLine("philidor_main_4_d4_Nf6", "Классический Филидор (4. d4 Nf6)", ["e4", "e5", "Nf3", "d6", "d4", "Nf6", "Nc3", "Nbd7", "Bc4", "Be7", "O-O", "O-O", "Re1", "c6", "a4", "exd4", "Nxd4", "Re8", "Ba2", "Bf8", "Bf4", "Ne5", "Bg3", "Ng6"]),
+          makeLine("philidor_4_d4_exd4", "Размен в центре 4...exd4", ["e4", "e5", "Nf3", "d6", "d4", "exd4", "Nxd4", "Nf6", "Nc3", "Be7", "Be2", "O-O", "O-O", "Re8", "Re1", "Nbd7", "Bf1", "Bf8", "Bg5", "h6", "Bh4", "c6", "Qd2", "Qb6"]),
+          makeLine("philidor_3_Bc4", "Ответ белых 3. Bc4", ["e4", "e5", "Nf3", "d6", "Bc4", "Be7", "d4", "Nf6", "Nc3", "Nbd7", "O-O", "O-O", "Re1", "c6", "a4", "Qc7", "h3", "b6", "Ba2", "a6", "Nh4", "Re8", "Nf5", "Bf8"]),
+          makeLine("philidor_3_d4", "Ранний удар 3. d4", ["e4", "e5", "Nf3", "d6", "d4", "Bg4", "dxe5", "Bxf3", "Qxf3", "dxe5", "Bc4", "Nf6", "Qb3", "Qe7", "Nc3", "c6", "Bg5", "b5", "Nxb5", "cxb5", "Bxb5+", "Nbd7", "O-O-O", "Rd8"]),
+          makeLine("philidor_anti_4_Bc4", "Размен белопольных слонов", ["e4", "e5", "Nf3", "d6", "Bc4", "Be6", "Bxe6", "fxe6", "d4", "exd4", "Nxd4", "Qd7", "Nc3", "Nf6", "O-O", "Be7", "f4", "O-O", "Kh1", "Nc6", "Nxc6", "Qxc6", "Qe2", "Rae8"]),
+          makeLine("philidor_trap_e5_blockade", "Оборона на королевском фланге и контригра в центре", ["e4", "e5", "Nf3", "d6", "d4", "Nf6", "Nc3", "Nbd7", "g4", "Nxg4", "Rg1", "Ngf6", "Bc4", "Be7", "Be3", "O-O", "Qe2", "c6", "O-O-O", "Qc7", "Kb1", "b5", "Bd3", "Re8"])
+        ]
+      },
+      {
+        id: "alekhine_defense",
+        title: "Защита Алехина",
+        eco: "B02",
+        color: "b",
+        plan: "Провокация пешечного центра белых с последующим подрывом ходами ...c5, ...d6 и ...f6.",
+        lines: [
+          makeLine("alekhine_four_pawns_4_c4", "Атака четырёх пешек (4. c4)", ["e4", "Nf6", "e5", "Nd5", "d4", "d6", "c4", "Nb6", "f4", "dxe5", "fxe5", "Nc6", "Be3", "Bf5", "Nc3", "e6", "Nf3", "Be7", "Be2", "O-O", "O-O", "f6", "exf6", "Bxf6"]),
+          makeLine("alekhine_exchange_4_Nf3", "Классический вариант с 4. Nf3", ["e4", "Nf6", "e5", "Nd5", "d4", "d6", "Nf3", "Bg4", "Be2", "c6", "O-O", "Bxf3", "Bxf3", "dxe5", "dxe5", "e6", "Qe2", "Nd7", "Rd1", "Qc7", "Bxd5", "cxd5", "Bf4", "Bc5"]),
+          makeLine("alekhine_modern_2_Nc3", "Современный вариант с 2. Nc3", ["e4", "Nf6", "Nc3", "d5", "e5", "Nfd7", "d4", "e6", "f4", "c5", "Nf3", "Nc6", "Be3", "cxd4", "Nxd4", "Bc5", "Qd2", "O-O", "O-O-O", "Nxd4", "Bxd4", "Bxd4", "Qxd4", "Qb6"]),
+          makeLine("alekhine_chase_4_Be2", "Система с 4. Be2", ["e4", "Nf6", "e5", "Nd5", "d4", "d6", "Be2", "dxe5", "dxe5", "Bf5", "Nf3", "e6", "O-O", "Be7", "Nd4", "Bg6", "f4", "O-O", "f5", "exf5", "Nxf5", "Bc5+", "Kh1", "Nc6"]),
+          makeLine("alekhine_anti_2_d3", "Тихая система с 2. d3", ["e4", "Nf6", "d3", "d5", "Nd2", "e5", "Ngf3", "Nc6", "Be2", "Be7", "O-O", "O-O", "c3", "a5", "Re1", "Re8", "Qc2", "Bf8", "Bf1", "g6", "exd5", "Nxd5", "Nc4", "Bg7"]),
+          makeLine("alekhine_trap_c5_strike", "Подрыв центра ходом ...d5", ["e4", "Nf6", "e5", "Nd5", "d4", "d6", "Nf3", "Bg4", "Be2", "Nc6", "O-O", "e6", "c4", "Nb6", "exd6", "cxd6", "Nc3", "Be7", "b3", "O-O", "Be3", "d5", "c5", "Nd7"])
+        ]
+      },
+      {
+        id: "pirc_defense",
+        title: "Защита Пирца — Уфимцева",
+        eco: "B07",
+        color: "b",
+        plan: "Фианкетто слона на g7, прорыв ...e5 и фигурная контригра.",
+        lines: [
+          makeLine("pirc_classical_5_Nf3_Bg7_6_Be2", "Классическая система (6. Be2)", ["e4", "d6", "d4", "Nf6", "Nc3", "g6", "Nf3", "Bg7", "Be2", "O-O", "O-O", "c6", "a4", "Nbd7", "Re1", "e5", "dxe5", "dxe5", "Bc4", "Qc7", "h3", "Nc5", "b4", "Ne6"]),
+          makeLine("pirc_austrian_attack_5_f4", "Австрийская атака (5. f4)", ["e4", "d6", "d4", "Nf6", "Nc3", "g6", "f4", "Bg7", "Nf3", "O-O", "Bd3", "Na6", "O-O", "c5", "d5", "Nc7", "a4", "e6", "dxe6", "Bxe6", "f5", "Bd7", "Qe1", "Bc6"]),
+          makeLine("pirc_150_attack_5_Be3", "Система 150 (5. Be3)", ["e4", "d6", "d4", "Nf6", "Nc3", "g6", "Be3", "Bg7", "Qd2", "c6", "f3", "b5", "Nge2", "Nbd7", "Bh6", "Bxh6", "Qxh6", "Bb7", "a3", "e5", "O-O-O", "Qe7", "Kb1", "a6"]),
+          makeLine("pirc_5_Bg5", "Вариант с 5. Bg5", ["e4", "d6", "d4", "Nf6", "Nc3", "g6", "Bg5", "Bg7", "Qd2", "h6", "Bh4", "O-O", "f4", "c5", "d5", "e6", "dxe6", "Bxe6", "Nf3", "Nc6", "Be2", "Qe7", "O-O", "Rad8"]),
+          makeLine("pirc_anti_4_Nf3", "Гибкая игра против 4. Nf3", ["e4", "d6", "d4", "Nf6", "Nc3", "g6", "Nf3", "Bg7", "h3", "O-O", "Be3", "b6", "Qd2", "Bb7", "Bd3", "c5", "dxc5", "dxc5", "Bh6", "Nc6", "Bxg7", "Kxg7", "O-O-O", "Qc7"]),
+          makeLine("pirc_trap_c5_counter", "Контрудар ...c5 в защите Пирца", ["e4", "d6", "d4", "Nf6", "Nc3", "g6", "Nf3", "Bg7", "Be2", "O-O", "O-O", "c5", "dxc5", "Qa5", "cxd6", "exd6", "Qxd6", "Rd8", "Qf4", "Nc6", "Bd2", "Nh5", "Qh4", "Bf6"])
+        ]
+      },
+      {
+        id: "modern_defense",
+        title: "Современная защита",
+        eco: "B06",
+        color: "b",
+        plan: "Гибкое фианкетто слона g7 и подрыв центра белых.",
+        lines: [
+          makeLine("modern_main_2_d4_Bg7_3_Nc3_d6", "Классическая схема с ...Bg7 и ...d6", ["e4", "g6", "d4", "Bg7", "Nc3", "d6", "Nf3", "c6", "Be2", "Nd7", "O-O", "e5", "dxe5", "dxe5", "Bc4", "Ngf6", "Qd6", "Qe7", "Rd1", "Qxd6", "Rxd6", "Ke7", "Rd1", "b5"]),
+          makeLine("modern_a6_b5_wing", "Фланговая схема с ...a6 и ...b5", ["e4", "g6", "d4", "Bg7", "Nc3", "a6", "Nf3", "b5", "Bd3", "Bb7", "O-O", "d6", "Re1", "Nd7", "a4", "b4", "Na2", "a5", "c3", "c5", "Be3", "Ngf6", "Nbd2", "O-O"]),
+          makeLine("modern_3_Nf3_d6", "Вариант с 3. Nf3", ["e4", "g6", "d4", "Bg7", "Nf3", "d6", "Bc4", "Nf6", "Qe2", "O-O", "O-O", "c5", "dxc5", "Qa5", "cxd6", "exd6", "Nc3", "Nc6", "h3", "a6", "Rd1", "Qc7", "Bf4", "Ne5"]),
+          makeLine("modern_3_f4", "Острый ответ белых 3. f4", ["e4", "g6", "d4", "Bg7", "f4", "d5", "e5", "c5", "c3", "cxd4", "cxd4", "Nc6", "Nf3", "Bg4", "Be3", "Qb6", "Qd2", "Bxf3", "gxf3", "Nh6", "Nc3", "Nf5", "Bf2", "e6"]),
+          makeLine("modern_anti_1_d4_g6", "Современная против 1. d4", ["d4", "g6", "c4", "Bg7", "Nc3", "d6", "e4", "c5", "d5", "e6", "Nf3", "Ne7", "Be2", "exd5", "cxd5", "O-O", "O-O", "Bg4", "Nd2", "Bxe2", "Qxe2", "Nd7", "Nc4", "Nb6"]),
+          makeLine("modern_trap_center_break", "Подрыв ...c5 против фланговой атаки белых", ["e4", "g6", "d4", "Bg7", "Nc3", "d6", "Be3", "a6", "Qd2", "b5", "f3", "Nd7", "h4", "h5", "Nh3", "Bb7", "Ng5", "Rc8", "O-O-O", "c5", "Kb1", "cxd4", "Bxd4", "Bxd4"])
+        ]
+      },
+      {
+        id: "against_kings_gambit",
+        title: "Против Королевского гамбита",
+        eco: "C30",
+        color: "b",
+        plan: "Надёжное развитие или контрудар в центре (Фалькбеер / отказ / принятие).",
+        lines: [
+          makeLine("akg_falkbeer_2_d5", "Контргамбит Фалькбеера (2...d5)", ["e4", "e5", "f4", "d5", "exd5", "e4", "d3", "Nf6", "Nd2", "exd3", "Bxd3", "Qxd5", "Qe2+", "Be7", "Ngf3", "O-O", "O-O", "Nc6", "Bc4", "Bc5+", "Kh1", "Qd6", "Ne4", "Nxe4"]),
+          makeLine("akg_classical_2_Bc5", "Классический отказ (2...Bc5)", ["e4", "e5", "f4", "Bc5", "Nf3", "d6", "Nc3", "Nf6", "Bc4", "Nc6", "d3", "Bg4", "h3", "Bxf3", "Qxf3", "Nd4", "Qg3", "Qe7", "fxe5", "dxe5", "Bg5", "c6", "O-O-O", "b5"]),
+          makeLine("akg_accepted_3_Nf3_g5", "Принятый гамбит с 3...g5", ["e4", "e5", "f4", "exf4", "Nf3", "g5", "Bc4", "Bg7", "d4", "d6", "O-O", "h6", "c3", "Nc6", "Qb3", "Qe7", "Na3", "a6", "Bd2", "Nf6", "Rae1", "O-O", "Bd3", "Nh5"]),
+          makeLine("akg_accepted_3_Nf3_Be7", "Принятый гамбит с 3...Be7", ["e4", "e5", "f4", "exf4", "Nf3", "Be7", "Bc4", "Nf6", "Nc3", "O-O", "O-O", "d6", "d4", "c6", "Bxf4", "b5", "Bd3", "Bg4", "h3", "Bh5", "Qe1", "Nbd7", "Nh4", "Bg6"]),
+          makeLine("akg_anti_2_Nc6", "Гибкая система с 2...Nc6", ["e4", "e5", "f4", "Nc6", "Nf3", "Bc5", "Nc3", "d6", "Bb5", "Nf6", "d3", "O-O", "Bxc6", "bxc6", "Qe2", "exf4", "Bxf4", "Nh5", "Bd2", "f5", "O-O-O", "fxe4", "Nxe4", "Bb6"]),
+          makeLine("akg_trap_falkbeer_queen", "Давление по линии e после ...Re8", ["e4", "e5", "f4", "d5", "exd5", "e4", "d3", "Nf6", "dxe4", "Nxe4", "Nf3", "Bc5", "Qe2", "Bf5", "Nc3", "O-O", "Nxe4", "Re8", "Nfd2", "Nd7", "g4", "Bxe4", "Nxe4", "Nf6"])
+        ]
+      },
+      {
+        id: "bishops_opening",
+        title: "Дебют слона",
+        eco: "C23",
+        color: "w",
+        plan: "Ранний вывод слона на c4 с гибким построением центра и атак.",
+        lines: [
+          makeLine("bishops_2_Nf6_3_d3", "Классический дебют слона (3. d3)", ["e4", "e5", "Bc4", "Nf6", "d3", "c6", "Nf3", "d5", "Bb3", "Bd6", "Nc3", "O-O", "O-O", "dxe4", "Nxe4", "Nxe4", "dxe4", "Qe7", "Bg5", "Qc7", "Nh4", "Bc5", "Qh5", "Be6"]),
+          makeLine("bishops_2_Bc5_3_Nf3", "Симметричный ответ 2...Bc5", ["e4", "e5", "Bc4", "Bc5", "Nf3", "Nc6", "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+", "Bd2", "Bxd2+", "Nbxd2", "d5", "exd5", "Nxd5", "Qb3", "Nce7", "O-O", "O-O", "Rfe1", "c6"]),
+          makeLine("bishops_uruzov_3_Nc3", "Система с 3. Nc3 и ранним f4", ["e4", "e5", "Bc4", "Nf6", "Nc3", "Nc6", "d3", "Bc5", "f4", "d6", "Nf3", "Bg4", "h3", "Bxf3", "Qxf3", "Nd4", "Qg3", "Qe7", "fxe5", "dxe5", "Bg5", "c6", "Rf1", "O-O-O"]),
+          makeLine("bishops_2_Nf6_3_f4", "Острый ход 3. f4", ["e4", "e5", "Bc4", "Nf6", "f4", "d5", "exd5", "Nxd5", "Nf3", "exf4", "O-O", "Be7", "d4", "O-O", "Nc3", "Nxc3", "bxc3", "Bd6", "Qd3", "Nc6", "Bd2", "Bg4", "Rae1", "Qd7"]),
+          makeLine("bishops_anti_2_Nc6", "Против 2...Nc6", ["e4", "e5", "Bc4", "Nc6", "Nf3", "Nf6", "d3", "Bc5", "c3", "d6", "Nbd2", "O-O", "O-O", "a6", "Bb3", "Ba7", "Re1", "Ne7", "Nf1", "Ng6", "Ng3", "h6", "h3", "Re8"]),
+          makeLine("bishops_trap_f7_pressure", "Координация слона b3 и фигур королевского фланга", ["e4", "e5", "Bc4", "Nf6", "d3", "Nc6", "Nf3", "Bc5", "O-O", "d6", "c3", "O-O", "Nbd2", "a6", "Bb3", "Ba7", "h3", "Ne7", "Re1", "Ng6", "Nf1", "Nh5", "Be3", "Bxe3"])
+        ]
+      },
+      {
+        id: "benoni_defense",
+        title: "Защита Бенони",
+        eco: "A60",
+        color: "b",
+        plan: "Асимметричный центр с перевесом пешек чёрных на ферзевом фланге и контригрой.",
+        lines: [
+          makeLine("benoni_modern_main", "Современная Бенони (6...d6)", ["d4", "Nf6", "c4", "c5", "d5", "e6", "Nc3", "exd5", "cxd5", "d6", "Nf3", "g6", "Nd2", "Nbd7", "e4", "Bg7", "Be2", "O-O", "O-O", "Re8", "a4", "Ne5", "Qc2", "Nh5"]),
+          makeLine("benoni_taimanov_6_Nf3", "Вариант с 6. Nf3", ["d4", "Nf6", "c4", "c5", "d5", "e6", "Nc3", "exd5", "cxd5", "d6", "Nf3", "g6", "Bf4", "Bg7", "Qa4+", "Bd7", "Qb3", "Qc7", "Nd2", "Nh5", "Bg5", "h6", "Bh4", "g5"]),
+          makeLine("benoni_four_pawns_7_f4", "Система с 7. f4", ["d4", "Nf6", "c4", "c5", "d5", "e6", "Nc3", "exd5", "cxd5", "d6", "Nf3", "g6", "f4", "Bg7", "Bb5+", "Nfd7", "a4", "O-O", "O-O", "Na6", "Nd2", "Nc7", "Be2", "f5"]),
+          makeLine("benoni_fianchetto_g3", "Вариант с фианкетто слона белых", ["d4", "Nf6", "c4", "c5", "d5", "e6", "Nc3", "exd5", "cxd5", "d6", "g3", "g6", "Bg2", "Bg7", "Nf3", "O-O", "O-O", "Re8", "Nd2", "Nbd7", "a4", "Ne5", "Qc2", "b6"]),
+          makeLine("benoni_anti_5_g3", "Ответ белых 5. g3", ["d4", "Nf6", "c4", "c5", "d5", "e6", "g3", "exd5", "cxd5", "d6", "Bg2", "g6", "Nc3", "Bg7", "Nf3", "O-O", "O-O", "Re8", "Nd2", "Nbd7", "a4", "Ne5", "Qc2", "Nh5"]),
+          makeLine("benoni_trap_e5_outpost", "Размен белопольных слонов и перевод коня на e5", ["d4", "Nf6", "c4", "c5", "d5", "e6", "Nc3", "exd5", "cxd5", "d6", "e4", "g6", "Nf3", "Bg7", "Be2", "O-O", "O-O", "a6", "a4", "Bg4", "Nd2", "Bxe2", "Qxe2", "Nbd7"])
+        ]
+      },
+      {
+        id: "dutch_defense",
+        title: "Голландская защита",
+        eco: "A80",
+        color: "b",
+        plan: "Контроль поля e5 ходом ...f5 и активная игра на королевском фланге или в центре.",
+        lines: [
+          makeLine("dutch_leningrad_main", "Ленинградская система (...g6 + ...Bg7)", ["d4", "f5", "c4", "Nf6", "g3", "g6", "Bg2", "Bg7", "Nf3", "O-O", "O-O", "d6", "Nc3", "Qe8", "b3", "Na6", "Ba3", "c6", "Qc2", "Rb8", "Rad1", "b5", "cxb5", "cxb5"]),
+          makeLine("dutch_stonewall_e6_d5_c6", "Каменная стена (...e6 + ...d5 + ...c6)", ["d4", "f5", "c4", "Nf6", "g3", "e6", "Bg2", "d5", "Nf3", "c6", "O-O", "Bd6", "b3", "Qe7", "Ne5", "O-O", "Nd2", "Bd7", "Ndf3", "Be8", "Bb2", "Nbd7", "Nd3", "Ne4"]),
+          makeLine("dutch_classical_e6_Be7", "Классическая голландская (...e6 + ...Be7)", ["d4", "f5", "c4", "Nf6", "Nc3", "e6", "Nf3", "Be7", "Bf4", "O-O", "e3", "d6", "Be2", "Qe8", "O-O", "Bd8", "Qc2", "Nc6", "Rad1", "Kh8", "a3", "a5", "h3", "b6"]),
+          makeLine("dutch_2_Bg5", "Агрессивный выпад белых 2. Bg5", ["d4", "f5", "Bg5", "Nf6", "Bxf6", "exf6", "e3", "d5", "c4", "c6", "Nc3", "Be6", "cxd5", "Bxd5", "Nxd5", "Qxd5", "Ne2", "Nd7", "Nf4", "Bb4+", "Ke2", "Qb5+", "Kf3", "g5"]),
+          makeLine("dutch_anti_2_Nf3", "Против 2. Nf3", ["d4", "f5", "Nf3", "Nf6", "g3", "e6", "Bg2", "Be7", "O-O", "O-O", "c4", "d6", "Nc3", "Ne4", "Qc2", "Nxc3", "Qxc3", "Bf6", "Qd3", "Nc6", "Bd2", "e5", "dxe5", "Nxe5"]),
+          makeLine("dutch_trap_e4_control", "Контрудар по центру ...e5 и ...c6", ["d4", "f5", "c4", "Nf6", "Nc3", "g6", "Bg5", "Bg7", "e3", "O-O", "Bd3", "d6", "Nge2", "Nc6", "O-O", "e5", "d5", "Ne7", "f4", "h6", "Bh4", "exf4", "exf4", "c6"])
+        ]
+      },
+      {
+        id: "colle_system",
+        title: "Система Колле",
+        eco: "D05",
+        color: "w",
+        plan: "Укрепление центра, форпост на e5 и подготовка прорыва e4.",
+        lines: [
+          makeLine("colle_main_e6_Bd6", "Классическая система Колле", ["d4", "d5", "Nf3", "Nf6", "e3", "e6", "Bd3", "Be7", "Nbd2", "O-O", "O-O", "c5", "b3", "Nc6", "Bb2", "b6", "Ne5", "Nxe5", "dxe5", "Nd7", "f4", "f5", "exf6", "Bxf6"]),
+          makeLine("colle_zukertort_b3_Bb2", "Колле — Цукерторт с слоном на b2", ["d4", "d5", "Nf3", "Nf6", "e3", "e6", "Bd3", "c5", "b3", "Nc6", "O-O", "Be7", "Bb2", "O-O", "Nbd2", "b6", "Ne5", "Bb7", "a3", "Nxe5", "dxe5", "Nd7", "f4", "f5"]),
+          makeLine("colle_2_Bf5", "Против раннего слона чёрных на f5", ["d4", "d5", "Nf3", "Bf5", "e3", "e6", "Bd3", "Bxd3", "Qxd3", "Nf6", "Nbd2", "Nbd7", "O-O", "Be7", "e4", "dxe4", "Nxe4", "Nxe4", "Qxe4", "c6", "Bf4", "O-O", "Rad1", "Nf6"]),
+          makeLine("colle_c4_transposition", "Гибкий переход к c4", ["d4", "d5", "Nf3", "Nf6", "e3", "e6", "Bd3", "c5", "c3", "Nc6", "Nbd2", "Bd6", "O-O", "O-O", "Re1", "e5", "dxe5", "Nxe5", "Nxe5", "Bxe5", "h3", "Bc7", "e4", "dxe4"]),
+          makeLine("colle_anti_g6_Bg7", "Против фианкетто слона чёрных", ["d4", "Nf6", "Nf3", "g6", "e3", "Bg7", "Bd3", "O-O", "O-O", "d6", "Nbd2", "Nbd7", "e4", "e5", "c3", "Re8", "Re1", "c6", "a4", "Qc7", "Qc2", "Nf8", "dxe5", "dxe5"]),
+          makeLine("colle_trap_e4_break", "Центральный прорыв e4 в системе Колле", ["d4", "d5", "Nf3", "Nf6", "e3", "e6", "Bd3", "Be7", "Nbd2", "O-O", "O-O", "c5", "c3", "Nc6", "Qe2", "Qc7", "dxc5", "Bxc5", "e4", "h6", "exd5", "exd5", "Nb3", "Bd6"])
+        ]
+      },
+      {
+        id: "bdg",
+        title: "Гамбит Блэкмара — Димера",
+        eco: "D00",
+        color: "w",
+        plan: "Жертва пешки ради быстрого развития, контроля центра и атаки по открытой линии f.",
+        lines: [
+          makeLine("bdg_bogoljubov_5_g6", "Защита Боголюбова (5...g6)", ["d4", "d5", "e4", "dxe4", "Nc3", "Nf6", "f3", "exf3", "Nxf3", "g6", "Bc4", "Bg7", "O-O", "O-O", "Qe1", "Nc6", "Qh4", "Nh5", "g4", "Nxd4", "gxh5", "Nxf3+", "Rxf3", "Qd4+"]),
+          makeLine("bdg_teichmann_5_Bg4", "Защита Тейхмана (5...Bg4)", ["d4", "d5", "e4", "dxe4", "Nc3", "Nf6", "f3", "exf3", "Nxf3", "Bg4", "h3", "Bxf3", "Qxf3", "c6", "Be3", "e6", "Bd3", "Be7", "O-O", "O-O", "Ne4", "Nxe4", "Qxe4", "f5"]),
+          makeLine("bdg_euwe_5_e6", "Защита Эйве (5...e6)", ["d4", "d5", "e4", "dxe4", "Nc3", "Nf6", "f3", "exf3", "Nxf3", "e6", "Bg5", "Be7", "Bd3", "Nbd7", "O-O", "O-O", "Qe1", "b6", "Qh4", "h6", "Bxh6", "gxh6", "Qxh6", "Re8"]),
+          makeLine("bdg_decline_4_Bf5", "Отказ от гамбита (4...Bf5)", ["d4", "d5", "e4", "dxe4", "Nc3", "Bf5", "f3", "exf3", "Qxf3", "Qc8", "Bc4", "e6", "Nge2", "Nf6", "O-O", "Bg6", "Bg5", "Be7", "Rae1", "O-O", "Nf4", "Nc6", "Nxg6", "hxg6"]),
+          makeLine("bdg_lederer_countergambit_4_c5", "Контргамбит Ледерера (4...c5)", ["d4", "d5", "e4", "dxe4", "Nc3", "Nf6", "f3", "c5", "d5", "exf3", "Nxf3", "e6", "Bb5+", "Bd7", "dxe6", "fxe6", "Qe2", "Qe7", "O-O", "Nc6", "Bg5", "O-O-O", "Rae1", "h6"]),
+          makeLine("bdg_anti_3_Bg4", "Ответ чёрных 3...Bg4", ["d4", "d5", "e4", "dxe4", "Nc3", "Bg4", "f3", "exf3", "Nxf3", "e6", "h3", "Bh5", "g4", "Bg6", "Ne5", "Qh4+", "Ke2", "Nc6", "Nxc6", "bxc6", "Bg2", "Ne7", "Bf4", "Nd5"])
+        ]
+      },
+      {
+        id: "two_knights_defense",
+        title: "Защита двух коней",
+        eco: "C55",
+        color: "b",
+        plan: "Активное развитие и контратака в центре в ответ на давление на пункт f7.",
+        lines: [
+          makeLine("tkd_main_4_d4_exd4", "Классическая защита двух коней (4. d4 exd4)", ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "d4", "exd4", "O-O", "Nxe4", "Re1", "d5", "Bxd5", "Qxd5", "Nc3", "Qa5", "Nxe4", "Be6", "Bg5", "Bb4", "c3", "dxc3", "bxc3", "Be7"]),
+          makeLine("tkd_4_Ng5_d5", "Контрудар 4...d5 против 4. Ng5", ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "d5", "exd5", "Na5", "Bb5+", "c6", "dxc6", "bxc6", "Be2", "h6", "Nf3", "e4", "Ne5", "Bd6", "d4", "exd3", "Nxd3", "O-O"]),
+          makeLine("tkd_4_d3_Bc5", "Тихий ответ белых 4. d3", ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "d3", "Bc5", "O-O", "d6", "c3", "O-O", "Nbd2", "a6", "Bb3", "Ba7", "h3", "Ne7", "Re1", "Ng6", "Nf1", "Nh5", "Be3", "Bxe3"]),
+          makeLine("tkd_4_Nc3_Nxe4", "Взятие на e4 после 4. Nc3", ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Nc3", "Nxe4", "Nxe4", "d5", "Bxd5", "Qxd5", "Nc3", "Qa5", "O-O", "Bg4", "h3", "Bh5", "Re1", "O-O-O", "g4", "Bg6", "Nxe5", "Nxe5"]),
+          makeLine("tkd_anti_4_O-O_Nxe4", "Вариант с 4. O-O Nxe4", ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "O-O", "Nxe4", "d4", "d5", "Re1", "Be6", "Nxe5", "Nxe5", "dxe5", "Bc5", "Be3", "Bxe3", "Rxe3", "O-O", "Nc3", "Nxc3", "Rxc3", "dxc4"]),
+          makeLine("tkd_trap_traxler_counter", "Острая жертва качества в защите двух коней", ["e4", "e5", "Nf3", "Nc6", "Bc4", "Nf6", "Ng5", "Bc5", "Nxf7", "Bxf2+", "Kf1", "Qe7", "Nxh8", "d5", "exd5", "Nd4", "c3", "Bg4", "Qa4+", "Bd7", "Qd1", "Bg4", "Qa4+", "Bd7"])
+        ]
+      },
+      {
+        id: "queens_pawn_game",
+        title: "Дебют ферзевых пешек (1. d4 d5 2. Nf3)",
+        eco: "D02",
+        color: "w",
+        plan: "Гибкое развитие с сохранением перехода к схемам ферзевого гамбита или фианкетто.",
+        lines: [
+          makeLine("qpg_main_Nf6_e3_c5", "Гибкая схема с c4 и e3", ["d4", "d5", "Nf3", "Nf6", "c4", "e6", "Nc3", "Be7", "Bf4", "O-O", "e3", "Nbd7", "Rc1", "c6", "Bd3", "dxc4", "Bxc4", "Nd5", "Bg3", "Nxc3", "Rxc3", "b5", "Be2", "Bb7"]),
+          makeLine("qpg_chigorin_like_2_Nc6", "Ответ чёрных 2...Nc6", ["d4", "d5", "Nf3", "Nc6", "c4", "Bg4", "cxd5", "Bxf3", "gxf3", "Qxd5", "e3", "e5", "Nc3", "Bb4", "Bd2", "Bxc3", "bxc3", "Qd6", "Rb1", "O-O-O", "Qb3", "b6", "Qxf7", "exd4"]),
+          makeLine("qpg_3_Bf4_c5", "Схема с 3. Bf4 и подрывом 3...c5", ["d4", "d5", "Nf3", "Nf6", "Bf4", "c5", "e3", "Nc6", "c3", "Qb6", "Qb3", "c4", "Qxb6", "axb6", "Nbd2", "b5", "Be2", "Bf5", "O-O", "e6", "Nh4", "Bg6", "Nxg6", "hxg6"]),
+          makeLine("qpg_3_e3_g6", "Против фианкетто чёрных (...g6 + ...Bg7)", ["d4", "Nf6", "Nf3", "g6", "c4", "Bg7", "Nc3", "O-O", "e4", "d6", "Be2", "e5", "O-O", "Nc6", "d5", "Ne7", "Ne1", "Nd7", "Be3", "f5", "f3", "f4", "Bf2", "g5"]),
+          makeLine("qpg_anti_2_Bf5", "Ответ чёрных 2...Bf5", ["d4", "d5", "Nf3", "Bf5", "c4", "e6", "Qb3", "Nc6", "cxd5", "exd5", "e3", "Nb4", "Na3", "a5", "Bd2", "Nf6", "Ne5", "Be7", "Be2", "O-O", "O-O", "c6", "Rac1", "Ne4"]),
+          makeLine("qpg_trap_center_bind", "Давление по линии c в дебюте ферзевых пешек", ["d4", "d5", "Nf3", "Nf6", "c4", "e6", "Nc3", "Nbd7", "Bg5", "Be7", "e3", "O-O", "Rc1", "c6", "Bd3", "dxc4", "Bxc4", "Nd5", "Bxe7", "Qxe7", "O-O", "Nxc3", "Rxc3", "e5"])
+        ]
+      },
+      {
+        id: "albin_countergambit",
+        title: "Контргамбит Альбина",
+        eco: "D08",
+        color: "b",
+        plan: "Жертва пешки ради клина на d4 и активности по открытым линиям и диагоналям.",
+        lines: [
+          makeLine("albin_main_3_dxe5_d4", "Главная линия с 3...d4", ["d4", "d5", "c4", "e5", "dxe5", "d4", "Nf3", "Nc6", "a3", "Bg4", "Nbd2", "Qe7", "h3", "Bxf3", "Nxf3", "O-O-O", "Bg5", "f6", "exf6", "gxf6", "Bh4", "Nh6", "Qd3", "Ne5"]),
+          makeLine("albin_3_dxe5_Nc6", "Вариант с 3...Nc6", ["d4", "d5", "c4", "e5", "dxe5", "Nc6", "Nf3", "d4", "Nbd2", "Be6", "g3", "Nge7", "Bg2", "Ng6", "O-O", "Ngxe5", "Nxe5", "Nxe5", "b3", "Qd7", "Bb2", "O-O-O", "Nf3", "Nxf3+"]),
+          makeLine("albin_lasker_trap_line", "Тактические мотивы с ...Bb4+ и ...Qe7", ["d4", "d5", "c4", "e5", "dxe5", "d4", "e3", "Bb4+", "Bd2", "dxe3", "Bxb4", "exf2+", "Kxf2", "Qxd1", "Nf3", "Nc6", "Bc3", "Be6", "Be2", "O-O-O", "Rxd1", "Nge7", "Nbd2", "Ng6"]),
+          makeLine("albin_3_Nf3", "Ответ белых 3. Nf3", ["d4", "d5", "c4", "e5", "Nf3", "e4", "Nfd2", "c6", "Nc3", "f5", "e3", "Nf6", "Be2", "Be7", "O-O", "O-O", "f3", "exf3", "Bxf3", "Ne4", "cxd5", "cxd5", "Qb3", "Nxc3"]),
+          makeLine("albin_anti_3_e3", "Система с 3. e3", ["d4", "d5", "c4", "e5", "e3", "exd4", "exd4", "Nf6", "Nc3", "Be7", "Nf3", "O-O", "Be2", "dxc4", "Bxc4", "Nbd7", "O-O", "Nb6", "Bb3", "Bg4", "Re1", "c6", "h3", "Bh5"]),
+          makeLine("albin_4_Nf3_Nc6_5_a3", "Острая борьба после 5. a3", ["d4", "d5", "c4", "e5", "dxe5", "d4", "Nf3", "Nc6", "a3", "f6", "exf6", "Nxf6", "e3", "dxe3", "Qxd8+", "Kxd8", "Bxe3", "Ng4", "Bg5+", "Be7", "Bxe7+", "Kxe7", "Nc3", "Nce5"])
+        ]
+      }
+    ];
+
+    function validateOpeningsOnBoot(rawList) {
+      if (typeof Chess !== "function") {
+        return { openings: rawList, validLinesCount: 0, totalLinesCount: 0, issues: [] };
+      }
+
+      const issues = [];
+      const validatedOpenings = [];
+      let totalLinesCount = 0;
+      let validLinesCount = 0;
+
+      for (const op of rawList) {
+        const validLines = [];
+        for (const line of op.lines || []) {
+          totalLinesCount += 1;
+          const sim = new Chess();
+          let brokenAt = null;
+
+          for (let i = 0; i < (line.sanList || []).length; i++) {
+            const san = String(line.sanList[i]).replace(/[!?+#]+$/g, "");
+            const mv = sim.move(san);
+            if (!mv) {
+              brokenAt = {
+                openingId: op.id,
+                openingTitle: op.title,
+                lineId: line.id,
+                lineTitle: line.title,
+                ply: i,
+                san,
+                fen: sim.fen()
+              };
+              break;
+            }
+          }
+
+          if (brokenAt) {
+            issues.push(brokenAt);
+          } else {
+            validLines.push(line);
+            validLinesCount += 1;
+          }
+        }
+
+        if (validLines.length > 0) {
+          validatedOpenings.push({ ...op, lines: validLines });
+        }
+      }
+
+      if (issues.length > 0) {
+        console.warn("[MoveByMove] Найдены невалидные линии при проверке через chess.js:", issues);
+      } else {
+        console.info(`[MoveByMove] Проверка chess.js пройдена: ${validLinesCount}/${totalLinesCount} линий валидны.`);
+      }
+
+      return { openings: validatedOpenings, validLinesCount, totalLinesCount, issues };
+    }
+
+    const validationResult = validateOpeningsOnBoot(RAW_OPENINGS);
+    const OPENINGS = validationResult.openings;
+
+    function defaultState() {
+      return {
+        xp: 0,
+        streak: { count: 0, lastDate: null },
+        stats: { clean: 0, assisted: 0, wrong: 0 },
+        masteredLines: {},
+        srs: {},
+        lichessUsername: ""
+      };
+    }
+
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+
+    function levelInfo(xp) {
+      let lvl = 1;
+      let need = 200;
+      let rem = Math.max(0, Number(xp) || 0);
+      while (rem >= need) {
+        rem -= need;
+        lvl += 1;
+        need = Math.round(need * 1.15);
+      }
+      const ranks = ["Новичок дебютов", "Ученик теории", "Клубный игрок", "Знаток линий", "Мастер дебютов"];
+      const rank = ranks[Math.min(ranks.length - 1, Math.floor((lvl - 1) / 2))];
+      return {
+        lvl,
+        rank,
+        rem,
+        need,
+        pct: rem === 0 ? 0 : Math.max(5, Math.min(100, Math.round((rem / need) * 100)))
+      };
+    }
+
+    let state = defaultState();
+    let currentTab = "openings";
+    let selOpeningId = OPENINGS[0] ? OPENINGS[0].id : "";
+    let selLineId = OPENINGS[0] && OPENINGS[0].lines[0] ? OPENINGS[0].lines[0].id : "";
+    let game = new Chess();
+    let ply = 0;
+    let pickedSq = null;
+    let pendingPromo = null;
+    let hintSq = null;
+    let lastSqs = [];
+    let penalizedMove = false;
+    let lichessLoading = false;
+    let resetArmed = false;
+
+    function isHexColor(val) {
+      return typeof val === "string" && /^#[0-9a-fA-F]{6}$/.test(val.trim());
+    }
+
+    function applyTelegramTheme() {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (!tg) return;
+      try {
+        tg.ready();
+        if (typeof tg.expand === "function") tg.expand();
+        const tp = tg.themeParams || {};
+        if (isHexColor(tp.bg_color)) {
+          document.documentElement.style.setProperty("--bg", tp.bg_color);
+        }
+        if (isHexColor(tp.secondary_bg_color)) {
+          document.documentElement.style.setProperty("--card", tp.secondary_bg_color);
+        }
+        if (isHexColor(tp.text_color)) {
+          document.documentElement.style.setProperty("--text", tp.text_color);
+        }
+        if (isHexColor(tp.hint_color)) {
+          document.documentElement.style.setProperty("--muted", tp.hint_color);
+        }
+      } catch (_) {}
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        state = {
+          xp: Math.max(0, Number(p.xp) || 0),
+          streak: {
+            count: Math.max(0, Number(p.streak && p.streak.count) || 0),
+            lastDate: (p.streak && p.streak.lastDate) || null
+          },
+          stats: {
+            clean: Math.max(0, Number(p.stats && p.stats.clean) || 0),
+            assisted: Math.max(0, Number(p.stats && p.stats.assisted) || 0),
+            wrong: Math.max(0, Number(p.stats && p.stats.wrong) || 0)
+          },
+          masteredLines: p.masteredLines && typeof p.masteredLines === "object" ? p.masteredLines : {},
+          srs: p.srs && typeof p.srs === "object" ? p.srs : {},
+          lichessUsername: typeof p.lichessUsername === "string" ? p.lichessUsername : ""
+        };
+      } catch (_) {
+        state = defaultState();
+      }
+    }
+
+    function saveState() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+      renderProfile();
+    }
+
+    function bumpStreak() {
+      const today = todayStr();
+      if (state.streak.lastDate === today) return;
+      const y = new Date();
+      y.setDate(y.getDate() - 1);
+      const yStr = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, "0")}-${String(y.getDate()).padStart(2, "0")}`;
+      state.streak.count = state.streak.lastDate === yStr ? state.streak.count + 1 : 1;
+      state.streak.lastDate = today;
+    }
+
+    function getOpening() {
+      return OPENINGS.find((o) => o.id === selOpeningId) || OPENINGS[0];
+    }
+
+    function getLine() {
+      const op = getOpening();
+      return (op && (op.lines.find((l) => l.id === selLineId) || op.lines[0])) || null;
+    }
+
+    function dueCards() {
+      const now = Date.now();
+      return Object.values(state.srs).filter((c) => Number(c.dueAt || 0) <= now);
+    }
+
+    function recordSrs(op, line, idx, san, cleanSuccess) {
+      const key = `${op.id}:${line.id}:${idx}`;
+      const prev = state.srs[key] || { box: 0, openingId: op.id, lineId: line.id, ply: idx, expectedSan: san };
+      const box = cleanSuccess ? Math.min(5, (Number(prev.box) || 0) + 1) : 0;
+      const days = SRS_DAYS[box] || 0;
+      state.srs[key] = {
+        ...prev,
+        box,
+        expectedSan: san,
+        dueAt: Date.now() + days * 86400000
+      };
+    }
+
+    function setMsg(text, kind = "info") {
+      const el = document.getElementById("feedback");
+      el.className = `feedback ${kind}`;
+      el.textContent = text;
+    }
+
+    function setSrsMsg(text, kind = "info") {
+      const el = document.getElementById("srs-status");
+      el.className = `feedback ${kind}`;
+      el.classList.remove("hidden");
+      el.textContent = text;
+    }
+
+    function setResetMsg(text, kind = "info") {
+      const el = document.getElementById("reset-status");
+      el.className = `feedback ${kind}`;
+      el.classList.remove("hidden");
+      el.textContent = text;
+    }
+
+    function setLichessMsg(text, kind = "info") {
+      const el = document.getElementById("lichess-status");
+      el.className = `feedback ${kind}`;
+      el.classList.remove("hidden");
+      el.textContent = text;
+    }
+
+    function setPromoVisible(visible) {
+      document.getElementById("promo-bar").classList.toggle("hidden", !visible);
+    }
+
+    function isPromotionMove(fromSq, toSq) {
+      const p = game.get(fromSq);
+      if (!p || p.type !== "p") return false;
+      const rank = toSq[1];
+      return (p.color === "w" && rank === "8") || (p.color === "b" && rank === "1");
+    }
+
+    function executeUserMove(fromSq, toSq, promoPiece = "q") {
+      const op = getOpening();
+      const line = getLine();
+      if (!op || !line || ply >= line.sanList.length || game.turn() !== op.color) return;
+
+      const expected = line.sanList[ply];
+      const move = game.move({ from: fromSq, to: toSq, promotion: promoPiece });
+      pickedSq = null;
+      pendingPromo = null;
+      hintSq = null;
+      setPromoVisible(false);
+
+      if (!move) {
+        renderBoard();
+        setMsg("Нелегальный ход по правилам шахмат.", "err");
+        return;
+      }
+
+      if (move.san === expected) {
+        lastSqs = [move.from, move.to];
+        const clean = !penalizedMove;
+        if (clean) {
+          state.xp += 15;
+          state.stats.clean += 1;
+        } else {
+          state.stats.assisted += 1;
+        }
+        bumpStreak();
+        recordSrs(op, line, ply, expected, clean);
+        const note = (line.notes && line.notes[ply]) || "Верный ход по линии.";
+        ply += 1;
+        penalizedMove = false;
+        autoReply();
+        saveState();
+        renderBoard();
+        renderMoves();
+        setMsg(
+          `Верно: ${move.san}${clean ? " (+15 XP)" : " (без XP из-за подсказки/ошибки)"}. ${note}`,
+          "ok"
+        );
+      } else {
+        game.undo();
+        penalizedMove = true;
+        state.stats.wrong += 1;
+        bumpStreak();
+        recordSrs(op, line, ply, expected, false);
+        saveState();
+        renderBoard();
+        setMsg("Этот ход отклоняется от выбранной линии. Попробуйте другой ход или подсказку.", "err");
+      }
+    }
+
+    function parseNdjsonGames(rawText) {
+      const trimmed = rawText.trim();
+      if (!trimmed) return [];
+      if (trimmed.startsWith("[")) {
+        const arr = JSON.parse(trimmed);
+        return Array.isArray(arr) ? arr : [];
+      }
+      const games = [];
+      for (const line of trimmed.split(/\r?\n/)) {
+        const s = line.trim();
+        if (!s) continue;
+        games.push(JSON.parse(s));
+      }
+      return games;
+    }
+
+    function classifyGameForUser(g, usernameLower) {
+      const whiteUser = g.players && g.players.white && g.players.white.user && g.players.white.user.name;
+      const blackUser = g.players && g.players.black && g.players.black.user && g.players.black.user.name;
+      const isWhite = whiteUser && whiteUser.toLowerCase() === usernameLower;
+      const isBlack = blackUser && blackUser.toLowerCase() === usernameLower;
+      if (!isWhite && !isBlack) return null;
+
+      const userColor = isWhite ? "w" : "b";
+      let outcome = "draw";
+      if (g.winner === "white") {
+        outcome = isWhite ? "win" : "loss";
+      } else if (g.winner === "black") {
+        outcome = isBlack ? "win" : "loss";
+      }
+
+      const opName = (g.opening && g.opening.name) || "Неизвестный дебют";
+      const eco = (g.opening && g.opening.eco) || "";
+      return { userColor, outcome, opName, eco };
+    }
+
+    function renderLichessAnalysis(username, games) {
+      const summaryEl = document.getElementById("lichess-summary");
+      const listEl = document.getElementById("lichess-openings-list");
+      const lower = username.toLowerCase();
+
+      const parsed = games.map((g) => classifyGameForUser(g, lower)).filter(Boolean);
+      if (!parsed.length) {
+        summaryEl.classList.add("hidden");
+        listEl.innerHTML = "";
+        setLichessMsg(`Для пользователя «${username}» не найдено завершённых партий.`, "info");
+        return;
+      }
+
+      let wins = 0;
+      let draws = 0;
+      let losses = 0;
+      let asWhite = 0;
+      let asBlack = 0;
+      const opMap = new Map();
+
+      for (const item of parsed) {
+        if (item.outcome === "win") wins += 1;
+        else if (item.outcome === "draw") draws += 1;
+        else losses += 1;
+
+        if (item.userColor === "w") asWhite += 1;
+        else asBlack += 1;
+
+        const key = `${item.eco}|${item.opName}`;
+        const prev = opMap.get(key) || { eco: item.eco, name: item.opName, total: 0, wins: 0 };
+        prev.total += 1;
+        if (item.outcome === "win") prev.wins += 1;
+        opMap.set(key, prev);
+      }
+
+      const total = wins + draws + losses;
+      const scorePct = Math.round(((wins + draws * 0.5) / total) * 100);
+
+      document.getElementById("lc-wdl").textContent = `${wins} / ${draws} / ${losses}`;
+      document.getElementById("lc-score").textContent = `${scorePct}%`;
+      document.getElementById("lc-colors").textContent = `${asWhite} / ${asBlack}`;
+      summaryEl.classList.remove("hidden");
+
+      const topOpenings = [...opMap.values()]
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 6);
+
+      listEl.innerHTML = topOpenings
+        .map((op) => {
+          const searchTerm = op.eco || op.name;
+          const safeTerm = encodeURIComponent(searchTerm);
+          return `
+            <div class="lichess-item">
+              <div>
+                <div style="font-weight: 700; font-size: 13px;">
+                  ${op.eco ? `<span class="badge">${op.eco}</span>` : ""}${op.name}
+                </div>
+                <div class="muted" style="font-size: 12px; margin-top: 2px;">
+                  Партий: ${op.total} · Побед: ${op.wins}
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm" data-lc-search="${safeTerm}">Найти в каталоге</button>
+            </div>
+          `;
+        })
+        .join("");
+
+      setLichessMsg(`Проанализировано партий: ${total} для профиля ${username}.`, "ok");
+    }
+
+    async function analyzeLichessUser() {
+      if (lichessLoading) return;
+      const inputEl = document.getElementById("lichess-username-input");
+      const btnEl = document.getElementById("btn-lichess-analyze");
+      const username = inputEl.value.trim();
+
+      if (!username) {
+        setLichessMsg("Введите никнейм на Lichess.", "err");
+        return;
+      }
+
+      lichessLoading = true;
+      btnEl.disabled = true;
+      btnEl.textContent = "Загрузка...";
+      setLichessMsg(`Запрашиваем последние партии ${username} с Lichess...`, "info");
+
+      try {
+        const url = `https://lichess.org/api/games/user/${encodeURIComponent(username)}?max=25&opening=true&pgnInJson=false&moves=false`;
+        const res = await fetch(url, {
+          headers: { Accept: "application/x-ndjson" }
+        });
+
+        if (res.status === 404) {
+          throw new Error("Пользователь на Lichess не найден.");
+        }
+        if (res.status === 429) {
+          throw new Error("Превышен лимит запросов к Lichess API. Подождите немного.");
+        }
+        if (!res.ok) {
+          throw new Error(`Ошибка Lichess API (HTTP ${res.status}).`);
+        }
+
+        const rawText = await res.text();
+        const games = parseNdjsonGames(rawText);
+        state.lichessUsername = username;
+        saveState();
+        renderLichessAnalysis(username, games);
+      } catch (err) {
+        document.getElementById("lichess-summary").classList.add("hidden");
+        document.getElementById("lichess-openings-list").innerHTML = "";
+        setLichessMsg(err && err.message ? err.message : "Не удалось загрузить партии с Lichess.", "err");
+      } finally {
+        lichessLoading = false;
+        btnEl.disabled = false;
+        btnEl.textContent = "Анализировать";
+      }
+    }
+
+    function autoReply() {
+      const op = getOpening();
+      const line = getLine();
+      if (!op || !line) return;
+      while (ply < line.sanList.length && game.turn() !== op.color) {
+        const mv = game.move(line.sanList[ply]);
+        if (!mv) break;
+        lastSqs = [mv.from, mv.to];
+        ply += 1;
+      }
+      if (ply >= line.sanList.length) {
+        if (!penalizedMove) state.masteredLines[line.id] = true;
+        saveState();
+        setMsg("Линия пройдена! Можно начать сначала или перейти к следующей линии.", "ok");
+      }
+    }
+
+    function startSession(openingId, lineId, startPly = 0) {
+      if (!OPENINGS.length) return;
+      selOpeningId = openingId;
+      const op = getOpening();
+      selLineId = lineId || op.lines[0].id;
+      const line = getLine();
+
+      game = new Chess();
+      ply = 0;
+      pickedSq = null;
+      pendingPromo = null;
+      hintSq = null;
+      lastSqs = [];
+      penalizedMove = false;
+      setPromoVisible(false);
+
+      const target = Math.max(0, Math.min(line.sanList.length, Number(startPly) || 0));
+      for (let i = 0; i < target; i++) {
+        const mv = game.move(line.sanList[i]);
+        if (!mv) break;
+        lastSqs = [mv.from, mv.to];
+        ply += 1;
+      }
+
+      autoReply();
+      syncSelectors();
+      renderBoard();
+      renderMoves();
+      renderTrainerMeta();
+      if (ply < line.sanList.length) {
+        setMsg("Ваш ход. Выберите фигуру и клетку назначения.", "info");
+      }
+    }
+
+    function onSquareClick(sq) {
+      if (pendingPromo) return;
+      const op = getOpening();
+      const line = getLine();
+      if (!op || !line || ply >= line.sanList.length || game.turn() !== op.color) return;
+
+      const piece = game.get(sq);
+      if (!pickedSq) {
+        if (piece && piece.color === op.color) {
+          pickedSq = sq;
+          renderBoard();
+        }
+        return;
+      }
+
+      if (pickedSq === sq) {
+        pickedSq = null;
+        renderBoard();
+        return;
+      }
+
+      if (piece && piece.color === op.color) {
+        pickedSq = sq;
+        renderBoard();
+        return;
+      }
+
+      if (isPromotionMove(pickedSq, sq)) {
+        pendingPromo = { from: pickedSq, to: sq };
+        setPromoVisible(true);
+        return;
+      }
+
+      executeUserMove(pickedSq, sq, "q");
+    }
+
+    function renderBoard() {
+      const boardEl = document.getElementById("board");
+      const op = getOpening();
+      if (!op) return;
+      const flip = op.color === "b";
+      const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+      const ranks = [8, 7, 6, 5, 4, 3, 2, 1];
+      const dRanks = flip ? [...ranks].reverse() : ranks;
+      const dFiles = flip ? [...files].reverse() : files;
+
+      const cells = [];
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const name = `${dFiles[c]}${dRanks[r]}`;
+          const light = (ranks[r] + files.indexOf(dFiles[c])) % 2 === 1;
+          const p = game.get(name);
+          const cls = ["sq", light ? "light" : "dark"];
+          if (p) cls.push(p.color === "w" ? "white-piece" : "black-piece");
+          if (pickedSq === name) cls.push("selected");
+          if (lastSqs.includes(name)) cls.push("last");
+          if (hintSq === name) cls.push("hint");
+          cells.push(`<div class="${cls.join(" ")}" data-sq="${name}">${p ? GLYPHS[p.color][p.type] : ""}</div>`);
+        }
+      }
+      boardEl.innerHTML = cells.join("");
+    }
+
+    function renderMoves() {
+      const line = getLine();
+      if (!line) return;
+      document.getElementById("moves-strip").innerHTML = line.sanList
+        .map((san, i) => {
+          const cls = i < ply ? "mv done" : i === ply ? "mv cur" : "mv";
+          const prefix = `${Math.floor(i / 2) + 1}${i % 2 === 0 ? "." : "..."}`;
+          return `<span class="${cls}">${prefix} ${san}</span>`;
+        })
+        .join("");
+    }
+
+    function renderTrainerMeta() {
+      const op = getOpening();
+      const line = getLine();
+      if (!op || !line) return;
+      document.getElementById("tr-opening").textContent = `${op.title} (${op.eco})`;
+      document.getElementById("tr-line").textContent = line.title;
+      document.getElementById("tr-side").textContent = op.color === "w" ? "Играете за белых" : "Играете за чёрных";
+      document.getElementById("tr-plan").textContent = op.plan;
+    }
+
+    function syncSelectors() {
+      const opSel = document.getElementById("tr-opening-select");
+      const lineSel = document.getElementById("tr-line-select");
+      opSel.innerHTML = OPENINGS.map(
+        (o) => `<option value="${o.id}" ${o.id === selOpeningId ? "selected" : ""}>${o.title} (${o.color === "w" ? "Белые" : "Чёрные"})</option>`
+      ).join("");
+      const op = getOpening();
+      lineSel.innerHTML = op.lines
+        .map((l) => `<option value="${l.id}" ${l.id === selLineId ? "selected" : ""}>${l.title}</option>`)
+        .join("");
+    }
+
+    function renderValidationBanner() {
+      const subEl = document.getElementById("header-validation-sub");
+      const bannerEl = document.getElementById("validation-banner");
+      const { validLinesCount, totalLinesCount, issues } = validationResult;
+      subEl.textContent = `${OPENINGS.length} дебютов · ${validLinesCount} проверенных линий`;
+
+      if (!issues.length) {
+        bannerEl.className = "feedback ok";
+        bannerEl.classList.remove("hidden");
+        bannerEl.textContent = `Проверка chess.js при загрузке: все ${validLinesCount} линий в ${OPENINGS.length} дебютах легальны.`;
+      } else {
+        bannerEl.className = "feedback err";
+        bannerEl.classList.remove("hidden");
+        bannerEl.textContent = `Проверка chess.js: подключено ${validLinesCount} из ${totalLinesCount} линий; отброшено проблемных линий: ${issues.length} (подробности в консоли).`;
+      }
+    }
+
+    function renderOpenings() {
+      const color = document.getElementById("color-filter").value;
+      const q = document.getElementById("search-input").value.trim().toLowerCase();
+      const list = OPENINGS.filter((o) => {
+        if (color !== "all" && o.color !== color) return false;
+        if (!q) return true;
+        return o.title.toLowerCase().includes(q) || o.eco.toLowerCase().includes(q);
+      });
+
+      document.getElementById("openings-grid").innerHTML = list
+        .map((o) => {
+          const done = o.lines.filter((l) => Boolean(state.masteredLines[l.id])).length;
+          return `
+            <div class="opening-card">
+              <div>
+                <div style="margin-bottom:6px;">
+                  <span class="badge">${o.eco}</span>
+                  <span class="badge">${o.color === "w" ? "Белые" : "Чёрные"}</span>
+                  <span class="badge">Линий: ${o.lines.length} · Освоено ${done}</span>
+                </div>
+                <div style="font-weight:700; font-size:15px; margin-bottom:4px;">${o.title}</div>
+                <div class="muted">${o.plan}</div>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" data-open-id="${o.id}">Тренировать</button>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    function renderProfile() {
+      const info = levelInfo(state.xp);
+      document.getElementById("xp-pill").textContent = `${state.xp} XP · Ур. ${info.lvl}`;
+      document.getElementById("prof-level").textContent = `Уровень ${info.lvl} · ${info.rank}`;
+      document.getElementById("prof-xp-bar").style.width = `${info.pct}%`;
+      document.getElementById("prof-xp-text").textContent = `${info.rem} / ${info.need} XP до следующего уровня`;
+      document.getElementById("prof-streak").textContent = `🔥 ${state.streak.count} дн.`;
+
+      const attempts = state.stats.clean + state.stats.assisted + state.stats.wrong;
+      document.getElementById("st-acc").textContent = attempts === 0 ? "—" : `${Math.round((state.stats.clean / attempts) * 100)}%`;
+      document.getElementById("st-mastered").textContent = String(Object.keys(state.masteredLines).length);
+
+      const due = dueCards().length;
+      document.getElementById("st-due").textContent = String(due);
+      document.getElementById("srs-text").textContent = `Карточек к повторению сегодня: ${due}`;
+
+      const lcInput = document.getElementById("lichess-username-input");
+      if (lcInput && !lcInput.value && state.lichessUsername) {
+        lcInput.value = state.lichessUsername;
+      }
+
+      const tgUser = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe && window.Telegram.WebApp.initDataUnsafe.user;
+      if (tgUser && tgUser.first_name) {
+        document.getElementById("prof-name").textContent = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ");
+      }
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById("openings-view").classList.toggle("hidden", tab !== "openings");
+      document.getElementById("trainer-view").classList.toggle("hidden", tab !== "trainer");
+      document.getElementById("profile-view").classList.toggle("hidden", tab !== "profile");
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+
+      if (tab === "openings") renderOpenings();
+      if (tab === "trainer") { renderBoard(); renderMoves(); renderTrainerMeta(); }
+      if (tab === "profile") renderProfile();
+    }
+
+    function bindEvents() {
+      document.querySelectorAll(".tab-btn").forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+      document.getElementById("color-filter").addEventListener("change", renderOpenings);
+      document.getElementById("search-input").addEventListener("input", renderOpenings);
+
+      document.getElementById("openings-grid").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-open-id]");
+        if (!btn) return;
+        startSession(btn.dataset.openId, null, 0);
+        switchTab("trainer");
+      });
+
+      document.getElementById("tr-opening-select").addEventListener("change", (e) => startSession(e.target.value, null, 0));
+      document.getElementById("tr-line-select").addEventListener("change", (e) => startSession(selOpeningId, e.target.value, 0));
+
+      document.getElementById("board").addEventListener("click", (e) => {
+        const sq = e.target.closest("[data-sq]");
+        if (sq) onSquareClick(sq.dataset.sq);
+      });
+
+      document.getElementById("promo-bar").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-promo]");
+        if (!btn || !pendingPromo) return;
+        const choice = btn.dataset.promo;
+        if (choice === "cancel") {
+          pendingPromo = null;
+          setPromoVisible(false);
+          renderBoard();
+          return;
+        }
+        executeUserMove(pendingPromo.from, pendingPromo.to, choice);
+      });
+
+      document.getElementById("btn-restart").addEventListener("click", () => startSession(selOpeningId, selLineId, 0));
+
+      document.getElementById("btn-hint").addEventListener("click", () => {
+        const op = getOpening();
+        const line = getLine();
+        if (!op || !line || ply >= line.sanList.length || game.turn() !== op.color) return;
+        const target = game.moves({ verbose: true }).find((m) => m.san === line.sanList[ply]);
+        if (!target) return;
+        penalizedMove = true;
+        pickedSq = target.from;
+        hintSq = target.to;
+        renderBoard();
+        setMsg(`Подсказка (0 XP): ход готовится с ${target.from} на ${target.to}.`, "info");
+      });
+
+      document.getElementById("btn-reveal").addEventListener("click", () => {
+        const op = getOpening();
+        const line = getLine();
+        if (!op || !line || ply >= line.sanList.length || game.turn() !== op.color) return;
+        const expected = line.sanList[ply];
+        const mv = game.move(expected);
+        if (!mv) return;
+        penalizedMove = true;
+        pickedSq = null;
+        pendingPromo = null;
+        hintSq = null;
+        setPromoVisible(false);
+        lastSqs = [mv.from, mv.to];
+        recordSrs(op, line, ply, expected, false);
+        ply += 1;
+        penalizedMove = false;
+        autoReply();
+        saveState();
+        renderBoard();
+        renderMoves();
+        setMsg(`Показан ход ${mv.san}. Карточка возвращена в коробку 0 SRS, XP не начислен.`, "info");
+      });
+
+      document.getElementById("btn-next-line").addEventListener("click", () => {
+        const op = getOpening();
+        if (!op) return;
+        const idx = op.lines.findIndex((l) => l.id === selLineId);
+        const next = op.lines[(idx + 1) % op.lines.length];
+        startSession(op.id, next.id, 0);
+      });
+
+      document.getElementById("btn-srs-train").addEventListener("click", () => {
+        const due = dueCards();
+        if (!due.length) {
+          setSrsMsg("Сегодня нет карточек SRS к повторению.", "info");
+          return;
+        }
+        document.getElementById("srs-status").classList.add("hidden");
+        startSession(due[0].openingId, due[0].lineId, due[0].ply);
+        switchTab("trainer");
+      });
+
+      document.getElementById("btn-lichess-analyze").addEventListener("click", analyzeLichessUser);
+      document.getElementById("lichess-username-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") analyzeLichessUser();
+      });
+
+      document.getElementById("lichess-openings-list").addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-lc-search]");
+        if (!btn) return;
+        const term = decodeURIComponent(btn.dataset.lcSearch);
+        document.getElementById("search-input").value = term;
+        document.getElementById("color-filter").value = "all";
+        switchTab("openings");
+      });
+
+      document.getElementById("btn-export").addEventListener("click", () => {
+        const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `movebymove_${todayStr()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        const btn = document.getElementById("btn-reset");
+        if (!resetArmed) {
+          resetArmed = true;
+          btn.textContent = "Нажмите ещё раз для сброса";
+          setResetMsg("Подтвердите сброс XP, серии, точности и карточек SRS повторным нажатием.", "err");
+          return;
+        }
+        resetArmed = false;
+        btn.textContent = "Сбросить прогресс";
+        state = defaultState();
+        saveState();
+        document.getElementById("lichess-username-input").value = "";
+        document.getElementById("lichess-summary").classList.add("hidden");
+        document.getElementById("lichess-openings-list").innerHTML = "";
+        document.getElementById("lichess-status").classList.add("hidden");
+        document.getElementById("srs-status").classList.add("hidden");
+        startSession(selOpeningId, selLineId, 0);
+        renderOpenings();
+        setResetMsg("Прогресс сброшен.", "ok");
+      });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadState();
+      applyTelegramTheme();
+      bindEvents();
+      renderValidationBanner();
+      renderProfile();
+      renderOpenings();
+      startSession(selOpeningId, selLineId, 0);
+    });
+  </script>
+</body>
+</html>
